@@ -6,14 +6,15 @@
 
 A Python client library for the [Respectify API](https://respectify.ai), providing both synchronous and asynchronous interfaces for comment moderation, spam detection, toxicity analysis, and dogwhistle detection.
 
+Respectify aims to be more than comment moderation: it tries to teach and edify users when a comment is rejected.
+
+For bloggers, companies with articles, etc it provides a way to keep discourse civil and on-topic without censorship.
+
 ## Features
 
-- **🔄 Dual Interface**: Both synchronous (`RespectifyClient`) and asynchronous (`RespectifyAsyncClient`) clients
-- **🛡️ Type Safety**: Full type hints with Pydantic schema validation  
-- **📊 Comprehensive**: All Respectify API endpoints supported
-- **⚡ Efficient**: Megacall support for multiple analyses in single requests
-- **🚨 Error Handling**: Custom exception classes for different API error conditions
-- **🐍 Modern Python**: Uses httpx for HTTP requests, beartype for runtime type checking
+- Supports the full [Resepctify](https://respectify.ai) feature set for analysing comments and discussion
+- Both synchronous (`RespectifyClient`) and asynchronous (`RespectifyAsyncClient`) clients
+- The Megacall endpoint allows multiple analyses in a single request
 
 ## Installation
 
@@ -35,16 +36,17 @@ client = RespectifyClient(
 )
 
 # Initialize a topic
+# Comments on a discussion are in the context of the discussion -- this is any starting material
 topic = client.init_topic_from_text("This is my article content")
 article_id = topic.article_id
-
-# Check if a comment is spam
-spam_result = client.check_spam("Great post!", article_id)
-print(f"Is spam: {spam_result.is_spam}")
 
 # Evaluate comment quality and toxicity
 score = client.evaluate_comment("This is a thoughtful comment", article_id)
 print(f"Quality: {score.overall_score}/5, Toxicity: {score.toxicity_score:.2f}")
+
+# Check if a comment is spam
+spam_result = client.check_spam("Great post!", article_id)
+print(f"Is spam: {spam_result.is_spam}")
 ```
 
 ### Asynchronous Client
@@ -82,7 +84,7 @@ Perform multiple analyses in a single API call:
 # Instead of multiple separate calls...
 result = client.megacall(
     comment="Test comment",
-    article_id=article_id,
+    article_id=article_id, # pre-registered with init_topic_from_url() (reads a page) or init_topic_from_text() (anything you send it)
     include_spam=True,
     include_relevance=True, 
     include_comment_score=True,
@@ -105,16 +107,16 @@ print(f"Dogwhistles: {result.dogwhistle.detection.dogwhistles_detected if result
 - `init_topic_from_url(url, topic_description=None)` - Initialize topic from URL
 
 **Comment Analysis:**
-- `check_spam(comment, article_id)` - Spam detection
-- `evaluate_comment(comment, article_id)` - Quality scoring and toxicity analysis  
+- `evaluate_comment(comment, article_id)` - Evaluates a comment on logical fallacies, objectionable phrases, negative tone, low effort
 - `check_relevance(comment, article_id, banned_topics=None)` - Relevance and banned topic detection
 - `check_dogwhistle(comment, sensitive_topics=None, dogwhistle_examples=None)` - Dogwhistle detection
+- `check_spam(comment, article_id)` - Spam detection
 
 **Batch Operations:**
 - `megacall(comment, article_id, **options)` - Multiple analyses in one call
 
 **Authentication:**
-- `check_user_credentials()` - Verify API credentials
+- `check_user_credentials()` - Verify API credentials work without calling any normal API
 
 ### Response Schemas
 
@@ -151,26 +153,12 @@ except BadRequestError as e:
 
 ## Configuration
 
-### Environment Variables
-
-Create a `.env` file for testing:
-
-```bash
-RESPECTIFY_EMAIL=your-email@example.com
-RESPECTIFY_API_KEY=your-api-key
-RESPECTIFY_BASE_URL=https://app.respectify.org  # Optional
-REAL_ARTICLE_ID=your-test-article-uuid         # Optional
-```
-
 ### Client Options
 
 ```python
 client = RespectifyClient(
     email="your-email@example.com",
-    api_key="your-api-key",
-    base_url="https://app.respectify.org",  # Optional, defaults to production
-    version="0.2",                          # Optional, API version
-    timeout=30.0                           # Optional, request timeout in seconds
+    api_key="your-api-key"
 )
 ```
 
@@ -178,11 +166,21 @@ client = RespectifyClient(
 
 ### Running Tests
 
+You will need to provide real Respectify credentials, because this will make calls against the actual API - not a mocked version. Use a key dedicated to testing to separate this from your normal usage.
+
+Create a `.env` file for testing:
+
+```bash
+RESPECTIFY_EMAIL=your-email@example.com
+RESPECTIFY_API_KEY=your-api-key
+REAL_ARTICLE_ID=a-genuine-initialised-article
+```
+
 ```bash
 # Install development dependencies
 pip install -e ".[dev]"
 
-# Run tests with real API (requires .env file)
+# Run tests with real API (requires .env file with real credentials)
 pytest tests/ -v
 
 # Run tests with coverage
@@ -211,7 +209,7 @@ ruff check respectify/
 ruff format respectify/
 
 # Beartype provides runtime type checking automatically
-# No separate type checking step needed!
+# Big fans of beartype here
 ```
 
 ## Requirements
@@ -242,3 +240,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Megacall support for efficient batch operations
 - Full test suite with real API integration
 - Sphinx documentation with examples
+

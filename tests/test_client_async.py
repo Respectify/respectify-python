@@ -35,7 +35,10 @@ class TestRespectifyAsyncClient:
         cls.email = os.getenv('RESPECTIFY_EMAIL')
         cls.api_key = os.getenv('RESPECTIFY_API_KEY')
         cls.base_url = os.getenv('RESPECTIFY_BASE_URL')
-        cls.test_article_id = UUID(os.getenv('REAL_ARTICLE_ID', str(uuid.uuid4())))
+        real_article_id = os.getenv('REAL_ARTICLE_ID')
+        if not real_article_id:
+            pytest.skip("Missing REAL_ARTICLE_ID environment variable for article-based tests")
+        cls.test_article_id = UUID(real_article_id)
         
         if not cls.email or not cls.api_key:
             pytest.skip("Missing RESPECTIFY_EMAIL or RESPECTIFY_API_KEY environment variables")
