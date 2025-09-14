@@ -157,9 +157,14 @@ class UserCheckResponse(BaseModel):
     
     # Note: Not frozen - server constructs this directly
     
-    success: str = Field(..., description="Success status as string")
-    info: str = Field(..., description="Information message about the check")
-    subscription: UserSubscriptionStatus = Field(..., description="User subscription information")
+    # Standard production response fields
+    success: Optional[str] = Field(None, description="Success status as string")
+    info: Optional[str] = Field(None, description="Information message about the check")
+    subscription: Optional[UserSubscriptionStatus] = Field(None, description="User subscription information")
+    
+    # Alternative staging response fields (when subscription required)
+    title: Optional[str] = Field(None, description="Error title when subscription required")
+    description: Optional[str] = Field(None, description="Error description when subscription required")
 
 
 class Hello(BaseModel):

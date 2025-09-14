@@ -124,9 +124,9 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         url: str = self._build_url("antispam")
         headers: Dict[str, str] = self._build_headers()
         
-        data: Dict[str, Union[str, UUID]] = {
+        data: Dict[str, str] = {
             "comment": comment,
-            "article_id": article_id
+            "article_id": str(article_id)
         }
         
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -160,9 +160,9 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         url: str = self._build_url("relevance")
         headers: Dict[str, str] = self._build_headers()
         
-        data: Dict[str, Union[str, UUID, List[str]]] = {
+        data: Dict[str, Union[str, List[str]]] = {
             "comment": comment,
-            "article_id": article_id
+            "article_id": str(article_id)
         }
         if banned_topics:
             data["banned_topics"] = banned_topics
@@ -192,9 +192,9 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         url: str = self._build_url("commentscore")
         headers: Dict[str, str] = self._build_headers()
         
-        data: Dict[str, Union[str, UUID]] = {
+        data: Dict[str, str] = {
             "comment": comment,
-            "article_id": article_id
+            "article_id": str(article_id)
         }
         
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -277,9 +277,9 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         url: str = self._build_url("megacall")
         headers: Dict[str, str] = self._build_headers()
         
-        data: Dict[str, Union[str, UUID, bool, List[str]]] = {
+        data: Dict[str, Union[str, bool, List[str]]] = {
             "comment": comment,
-            "article_id": article_id,
+            "article_id": str(article_id),
             "include_spam": include_spam,
             "include_relevance": include_relevance,
             "include_comment_score": include_comment_score,
@@ -309,7 +309,7 @@ class RespectifyAsyncClient(BaseRespectifyClient):
             UserCheckResponse containing authentication result
             
         Raises:
-            RespectifyError: If the request fails
+            RespectifyError: If the request fails with invalid credentials
         """
         url: str = self._build_url("checkuser")
         headers: Dict[str, str] = self._build_headers()
@@ -317,7 +317,8 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response: httpx.Response = await client.post(url, headers=headers, json={})
             
-            if response.status_code != 200:
+            # Accept both 200 (valid with subscription) and 402 (valid without subscription)
+            if response.status_code not in [200, 402]:
                 self._handle_error_response(response)
                 
             return self._parse_response(response, UserCheckResponse)
