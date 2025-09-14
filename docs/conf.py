@@ -64,8 +64,8 @@ typehints_document_rtype = True
 # Intersphinx mapping
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
-    'httpx': ('https://www.python-httpx.org/', None),
-    'pydantic': ('https://docs.pydantic.dev/', None),
+    # 'httpx': ('https://www.python-httpx.org/', None),  # Disabled - 404 error
+    # 'pydantic': ('https://docs.pydantic.dev/', None), # Disabled - 404 error
 }
 
 # MyST parser settings
@@ -75,7 +75,7 @@ myst_enable_extensions = [
     "dollarmath",
     "html_admonition",
     "html_image",
-    "linkify",
+    # "linkify",  # Disabled - requires linkify-it-py
     "replacements",
     "smartquotes",
     "strikethrough",
