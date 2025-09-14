@@ -14,6 +14,8 @@ class LogicalFallacy(BaseModel):
     
     fallacy_name: str = Field(..., description="The name of the logical fallacy, e.g., 'straw man'")
     quoted_logical_fallacy_example: str = Field(..., description="The part of the comment that contains the logical fallacy")
+    explanation_and_suggestions: str = Field(..., description="Explanation of the fallacy and suggestions for improvement")
+    suggested_rewrite: str = Field(..., description="Suggested rewrite of the fallacious content")
 
 
 class ObjectionablePhrase(BaseModel):
@@ -21,8 +23,9 @@ class ObjectionablePhrase(BaseModel):
     
     model_config = ConfigDict(frozen=True)
     
-    objectionable_content: str = Field(..., description="The objectionable phrase found in the comment")
+    quoted_objectionable_phrase: str = Field(..., description="The objectionable phrase found in the comment")
     explanation: str = Field(..., description="Explanation of why this phrase is objectionable")
+    suggested_rewrite: str = Field(..., description="Suggested rewrite of the objectionable content")
 
 
 class NegativeTonePhrase(BaseModel):
@@ -30,8 +33,9 @@ class NegativeTonePhrase(BaseModel):
     
     model_config = ConfigDict(frozen=True)
     
-    phrase: str = Field(..., description="The phrase with negative tone")
+    quoted_negative_tone_phrase: str = Field(..., description="The phrase with negative tone")
     explanation: str = Field(..., description="Explanation of the negative tone")
+    suggested_rewrite: str = Field(..., description="Suggested rewrite with more positive tone")
 
 
 class CommentScore(BaseModel):
@@ -64,7 +68,7 @@ class OnTopicResult(BaseModel):
     model_config = ConfigDict(frozen=True)
     
     reasoning: str = Field(..., description="Explanation of the relevance analysis")
-    is_on_topic: bool = Field(..., description="Whether the comment is on-topic") 
+    on_topic: bool = Field(..., description="Whether the comment is on-topic") 
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence level of relevance detection")
 
 
@@ -73,8 +77,10 @@ class BannedTopicsResult(BaseModel):
     
     model_config = ConfigDict(frozen=True)
     
+    reasoning: str = Field(..., description="Explanation of the banned topics analysis")
     banned_topics: List[str] = Field(default_factory=list, description="List of banned topics detected")
     quantity_on_banned_topics: float = Field(..., ge=0.0, le=1.0, description="Proportion of comment discussing banned topics")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence level of banned topics detection")
 
 
 class CommentRelevanceResult(BaseModel):
@@ -82,7 +88,7 @@ class CommentRelevanceResult(BaseModel):
     
     model_config = ConfigDict(frozen=True)
     
-    on_topic: OnTopicResult = Field(..., description="On-topic analysis result")
+    on_topic: OnTopicResult = Field(..., description="On-topic analysis result") 
     banned_topics: BannedTopicsResult = Field(..., description="Banned topics analysis result")
 
 
@@ -121,10 +127,10 @@ class MegaCallResult(BaseModel):
     
     model_config = ConfigDict(frozen=True)
     
-    spam: Optional[SpamDetectionResult] = Field(None, description="Spam detection result, if requested")
-    relevance: Optional[CommentRelevanceResult] = Field(None, description="Comment relevance result, if requested")
     comment_score: Optional[CommentScore] = Field(None, description="Comment score result, if requested")
-    dogwhistle: Optional[DogwhistleResult] = Field(None, description="Dogwhistle detection result, if requested")
+    spam_check: Optional[SpamDetectionResult] = Field(None, description="Spam detection result, if requested")
+    relevance_check: Optional[CommentRelevanceResult] = Field(None, description="Comment relevance result, if requested")
+    dogwhistle_check: Optional[DogwhistleResult] = Field(None, description="Dogwhistle detection result, if requested")
 
 
 class InitTopicResponse(BaseModel):
@@ -135,10 +141,39 @@ class InitTopicResponse(BaseModel):
     article_id: UUID = Field(..., description="UUID of the initialized article/topic")
 
 
+class UserSubscriptionStatus(BaseModel):
+    """Information about a user's subscription status."""
+    
+    model_config = ConfigDict(frozen=True)
+    
+    active: bool = Field(..., description="Whether the subscription is active")
+    status: Optional[str] = Field(None, description="Current subscription status")
+    expires: Optional[str] = Field(None, description="Subscription expiration date")
+    error: Optional[str] = Field(None, description="Error message if any")
+
+
 class UserCheckResponse(BaseModel):
     """Represents the response from checking user credentials."""
     
     model_config = ConfigDict(frozen=True)
     
-    success: bool = Field(..., description="Whether the authentication was successful")
-    message: str = Field(..., description="Message describing the authentication result")
+    success: str = Field(..., description="Success status as string")
+    info: str = Field(..., description="Information message about the check")
+    subscription: UserSubscriptionStatus = Field(..., description="User subscription information")
+
+
+class Hello(BaseModel):
+    """Response schema for the hello endpoint."""
+    
+    model_config = ConfigDict(frozen=True)
+    
+    message: str = Field(..., description="Hello message")
+    version: int = Field(..., description="API version")
+
+
+class DBArticleSummary(BaseModel):
+    """Internal schema for article summarization."""
+    
+    model_config = ConfigDict(frozen=True)
+    
+    summary: str = Field(..., description="Article summary text")
