@@ -125,7 +125,7 @@ class DogwhistleResult(BaseModel):
 class MegaCallResult(BaseModel):
     """Represents the result of a mega call containing multiple analysis types."""
     
-    model_config = ConfigDict(frozen=True)
+    # Note: Not frozen - server mutates fields after creation
     
     comment_score: Optional[CommentScore] = Field(None, description="Comment score result, if requested")
     spam_check: Optional[SpamDetectionResult] = Field(None, description="Spam detection result, if requested")
@@ -144,7 +144,7 @@ class InitTopicResponse(BaseModel):
 class UserSubscriptionStatus(BaseModel):
     """Information about a user's subscription status."""
     
-    model_config = ConfigDict(frozen=True)
+    # Note: Not frozen - server needs to mutate this object
     
     active: bool = Field(..., description="Whether the subscription is active")
     status: Optional[str] = Field(None, description="Current subscription status")
@@ -155,7 +155,7 @@ class UserSubscriptionStatus(BaseModel):
 class UserCheckResponse(BaseModel):
     """Represents the response from checking user credentials."""
     
-    model_config = ConfigDict(frozen=True)
+    # Note: Not frozen - server constructs this directly
     
     success: str = Field(..., description="Success status as string")
     info: str = Field(..., description="Information message about the check")
