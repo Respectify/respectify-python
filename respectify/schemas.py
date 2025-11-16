@@ -124,13 +124,28 @@ class DogwhistleResult(BaseModel):
 
 class MegaCallResult(BaseModel):
     """Represents the result of a mega call containing multiple analysis types."""
-    
+
     # Note: Not frozen - server mutates fields after creation
-    
+
     comment_score: Optional[CommentScore] = Field(None, description="Comment score result, if requested")
     spam_check: Optional[SpamDetectionResult] = Field(None, description="Spam detection result, if requested")
     relevance_check: Optional[CommentRelevanceResult] = Field(None, description="Comment relevance result, if requested")
     dogwhistle_check: Optional[DogwhistleResult] = Field(None, description="Dogwhistle detection result, if requested")
+
+    @property
+    def spam(self) -> Optional[SpamDetectionResult]:
+        """Alias for spam_check - provides cleaner API access."""
+        return self.spam_check
+
+    @property
+    def relevance(self) -> Optional[CommentRelevanceResult]:
+        """Alias for relevance_check - provides cleaner API access."""
+        return self.relevance_check
+
+    @property
+    def dogwhistle(self) -> Optional[DogwhistleResult]:
+        """Alias for dogwhistle_check - provides cleaner API access."""
+        return self.dogwhistle_check
 
 
 class InitTopicResponse(BaseModel):
@@ -167,18 +182,3 @@ class UserCheckResponse(BaseModel):
     description: Optional[str] = Field(None, description="Error description when subscription required")
 
 
-class Hello(BaseModel):
-    """Response schema for the hello endpoint."""
-    
-    model_config = ConfigDict(frozen=True)
-    
-    message: str = Field(..., description="Hello message")
-    version: int = Field(..., description="API version")
-
-
-class DBArticleSummary(BaseModel):
-    """Internal schema for article summarization."""
-    
-    model_config = ConfigDict(frozen=True)
-    
-    summary: str = Field(..., description="Article summary text")

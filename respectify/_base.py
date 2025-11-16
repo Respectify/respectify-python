@@ -32,7 +32,8 @@ class BaseRespectifyClient:
         api_key: str, 
         base_url: Optional[str] = None,
         version: Optional[str] = None,
-        timeout: float = 30.0
+        timeout: float = 30.0,
+        website: Optional[str] = None
     ) -> None:
         """Initialize the base client.
         
@@ -42,12 +43,14 @@ class BaseRespectifyClient:
             base_url: Base URL for the Respectify API (defaults to production)
             version: API version to use (defaults to 0.2)
             timeout: Request timeout in seconds
+            website: Optional website domain for license tracking
         """
         self.email: str = email
         self.api_key: str = api_key
         self.base_url: str = (base_url or self.DEFAULT_BASE_URL).rstrip('/')
         self.version: str = version or self.DEFAULT_VERSION
         self.timeout: float = timeout
+        self.website: Optional[str] = website
         
     @beartype
     def _build_url(self, endpoint: str) -> str:
@@ -69,11 +72,14 @@ class BaseRespectifyClient:
         Returns:
             Dictionary of HTTP headers
         """
-        return {
+        headers = {
             "Content-Type": "application/json",
             "X-User-Email": self.email,
             "X-API-Key": self.api_key,
         }
+        if self.website:
+            headers["X-Website"] = self.website
+        return headers
         
     @beartype
     def _handle_error_response(self, response: httpx.Response) -> None:

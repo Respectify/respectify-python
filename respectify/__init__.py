@@ -25,8 +25,6 @@ from respectify.schemas import (
     InitTopicResponse,
     UserCheckResponse,
     UserSubscriptionStatus,
-    Hello,
-    DBArticleSummary,
 )
 from respectify.exceptions import (
     RespectifyError,
@@ -57,8 +55,6 @@ __all__ = [
     "InitTopicResponse",
     "UserCheckResponse",
     "UserSubscriptionStatus",
-    "Hello",
-    "DBArticleSummary",
     # Exceptions
     "RespectifyError",
     "AuthenticationError",

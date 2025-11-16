@@ -28,7 +28,8 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         api_key: str,
         base_url: Optional[str] = None,
         version: Optional[str] = None,
-        timeout: float = 30.0
+        timeout: float = 30.0,
+        website: Optional[str] = None
     ) -> None:
         """Initialize the asynchronous Respectify client.
         
@@ -38,8 +39,9 @@ class RespectifyAsyncClient(BaseRespectifyClient):
             base_url: Base URL for the Respectify API (defaults to production)
             version: API version to use (defaults to 0.2)
             timeout: Request timeout in seconds
+            website: Optional website domain for license tracking
         """
-        super().__init__(email, api_key, base_url, version, timeout)
+        super().__init__(email, api_key, base_url, version, timeout, website)
         
     @beartype
     async def init_topic_from_text(
@@ -92,7 +94,7 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         Raises:
             RespectifyError: If the request fails
         """
-        api_url: str = self._build_url("inittopicurl")
+        api_url: str = self._build_url("inittopic")
         headers: Dict[str, str] = self._build_headers()
         
         data: Dict[str, str] = {"url": url}
@@ -126,7 +128,7 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         
         data: Dict[str, str] = {
             "comment": comment,
-            "article_id": str(article_id)
+            "article_context_id": str(article_id)
         }
         
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -157,12 +159,12 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         Raises:
             RespectifyError: If the request fails
         """
-        url: str = self._build_url("relevance")
+        url: str = self._build_url("commentrelevance")
         headers: Dict[str, str] = self._build_headers()
         
         data: Dict[str, Union[str, List[str]]] = {
             "comment": comment,
-            "article_id": str(article_id)
+            "article_context_id": str(article_id)
         }
         if banned_topics:
             data["banned_topics"] = banned_topics
@@ -194,7 +196,7 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         
         data: Dict[str, str] = {
             "comment": comment,
-            "article_id": str(article_id)
+            "article_context_id": str(article_id)
         }
         
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -207,39 +209,44 @@ class RespectifyAsyncClient(BaseRespectifyClient):
     
     @beartype
     async def check_dogwhistle(
-        self, 
+        self,
         comment: str,
+        article_id: UUID,
         sensitive_topics: Optional[List[str]] = None,
         dogwhistle_examples: Optional[List[str]] = None
     ) -> DogwhistleResult:
         """Check if a comment contains dogwhistle language.
-        
+
         Args:
             comment: The comment text to check
+            article_id: UUID of the article/topic for context
             sensitive_topics: Optional list of sensitive topics to check against
             dogwhistle_examples: Optional list of known dogwhistle examples
-            
+
         Returns:
             DogwhistleResult containing dogwhistle analysis
-            
+
         Raises:
             RespectifyError: If the request fails
         """
         url: str = self._build_url("dogwhistle")
         headers: Dict[str, str] = self._build_headers()
-        
-        data: Dict[str, Union[str, List[str]]] = {"comment": comment}
+
+        data: Dict[str, Union[str, List[str]]] = {
+            "comment": comment,
+            "article_context_id": str(article_id)
+        }
         if sensitive_topics:
             data["sensitive_topics"] = sensitive_topics
         if dogwhistle_examples:
             data["dogwhistle_examples"] = dogwhistle_examples
-            
+
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response: httpx.Response = await client.post(url, json=data, headers=headers)
-            
+
             if response.status_code != 200:
                 self._handle_error_response(response)
-                
+
             return self._parse_response(response, DogwhistleResult)
     
     @beartype
@@ -256,7 +263,7 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         dogwhistle_examples: Optional[List[str]] = None
     ) -> MegaCallResult:
         """Perform multiple analysis types in a single API call.
-        
+
         Args:
             comment: The comment text to analyze
             article_id: UUID of the article/topic
@@ -267,38 +274,38 @@ class RespectifyAsyncClient(BaseRespectifyClient):
             banned_topics: Optional list of banned topics for relevance check
             sensitive_topics: Optional list of sensitive topics for dogwhistle check
             dogwhistle_examples: Optional list of dogwhistle examples
-            
+
         Returns:
             MegaCallResult containing requested analysis results
-            
+
         Raises:
             RespectifyError: If the request fails
         """
         url: str = self._build_url("megacall")
         headers: Dict[str, str] = self._build_headers()
-        
+
         data: Dict[str, Union[str, bool, List[str]]] = {
             "comment": comment,
-            "article_id": str(article_id),
-            "include_spam": include_spam,
-            "include_relevance": include_relevance,
-            "include_comment_score": include_comment_score,
-            "include_dogwhistle": include_dogwhistle
+            "article_context_id": str(article_id),
+            "run_spam_check": include_spam,
+            "run_relevance_check": include_relevance,
+            "run_comment_score": include_comment_score,
+            "run_dogwhistle_check": include_dogwhistle
         }
-        
+
         if banned_topics:
             data["banned_topics"] = banned_topics
         if sensitive_topics:
             data["sensitive_topics"] = sensitive_topics
         if dogwhistle_examples:
             data["dogwhistle_examples"] = dogwhistle_examples
-            
+
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response: httpx.Response = await client.post(url, json=data, headers=headers)
-            
+
             if response.status_code != 200:
                 self._handle_error_response(response)
-                
+
             return self._parse_response(response, MegaCallResult)
     
     @beartype
@@ -311,14 +318,14 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         Raises:
             RespectifyError: If the request fails with invalid credentials
         """
-        url: str = self._build_url("checkuser")
+        url: str = self._build_url("usercheck")
         headers: Dict[str, str] = self._build_headers()
-        
+
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response: httpx.Response = await client.post(url, headers=headers, json={})
-            
+            response: httpx.Response = await client.get(url, headers=headers)
+
             # Accept both 200 (valid with subscription) and 402 (valid without subscription)
             if response.status_code not in [200, 402]:
                 self._handle_error_response(response)
-                
+
             return self._parse_response(response, UserCheckResponse)

@@ -193,15 +193,15 @@ class TestRespectifyAsyncClient:
             'This is a relevant async comment',
             self.test_article_id
         )
-        
+
         assert isinstance(result, CommentRelevanceResult)
-        
+
         # Check OnTopicResult
-        assert isinstance(result.on_topic.is_on_topic, bool)
+        assert isinstance(result.on_topic.on_topic, bool)
         assert isinstance(result.on_topic.confidence, float)
         assert 0.0 <= result.on_topic.confidence <= 1.0
         assert isinstance(result.on_topic.reasoning, str)
-        
+
         # Check BannedTopicsResult
         assert isinstance(result.banned_topics.banned_topics, list)
         assert isinstance(result.banned_topics.quantity_on_banned_topics, float)
@@ -234,15 +234,16 @@ class TestRespectifyAsyncClient:
     async def test_check_dogwhistle_success(self):
         """Test successful dogwhistle detection."""
         result = await self.client.check_dogwhistle(
-            'This is a regular async comment with no problematic content.'
+            'This is a regular async comment with no problematic content.',
+            self.test_article_id
         )
-        
+
         assert isinstance(result, DogwhistleResult)
         assert isinstance(result.detection.reasoning, str)
         assert isinstance(result.detection.dogwhistles_detected, bool)
         assert isinstance(result.detection.confidence, float)
         assert 0.0 <= result.detection.confidence <= 1.0
-        
+
         # Details can be None if no dogwhistles detected
         if result.details is not None:
             assert isinstance(result.details.dogwhistle_terms, list)
@@ -251,23 +252,24 @@ class TestRespectifyAsyncClient:
             assert 0.0 <= result.details.subtlety_level <= 1.0
             assert isinstance(result.details.harm_potential, float)
             assert 0.0 <= result.details.harm_potential <= 1.0
-        
+
         print(f"\nAsync dogwhistle check result: detected={result.detection.dogwhistles_detected}, "
               f"confidence={result.detection.confidence:.2f}")
-    
+
     @pytest.mark.asyncio
     async def test_check_dogwhistle_with_sensitive_topics_success(self):
         """Test successful dogwhistle detection with sensitive topics."""
         result = await self.client.check_dogwhistle(
             'This is an async comment to test with specific topics.',
+            self.test_article_id,
             sensitive_topics=['politics', 'social issues']
         )
-        
+
         assert isinstance(result, DogwhistleResult)
         assert isinstance(result.detection.reasoning, str)
         assert isinstance(result.detection.dogwhistles_detected, bool)
         assert isinstance(result.detection.confidence, float)
-        
+
         print(f"\nAsync dogwhistle check with sensitive topics: detected={result.detection.dogwhistles_detected}")
     
     @pytest.mark.asyncio
@@ -278,20 +280,20 @@ class TestRespectifyAsyncClient:
             self.test_article_id,
             include_spam=True
         )
-        
+
         assert isinstance(result, MegaCallResult)
-        assert isinstance(result.spam, SpamDetectionResult)
-        assert isinstance(result.spam.is_spam, bool)
-        assert isinstance(result.spam.confidence, float)
-        assert 0.0 <= result.spam.confidence <= 1.0
-        
+        assert isinstance(result.spam_check, SpamDetectionResult)
+        assert isinstance(result.spam_check.is_spam, bool)
+        assert isinstance(result.spam_check.confidence, float)
+        assert 0.0 <= result.spam_check.confidence <= 1.0
+
         # Other services should be None
-        assert result.relevance is None
+        assert result.relevance_check is None
         assert result.comment_score is None
-        assert result.dogwhistle is None
-        
-        print(f"\nAsync megacall spam only: confidence={result.spam.confidence:.2f}")
-    
+        assert result.dogwhistle_check is None
+
+        print(f"\nAsync megacall spam only: confidence={result.spam_check.confidence:.2f}")
+
     @pytest.mark.asyncio
     async def test_megacall_relevance_only_success(self):
         """Test successful megacall with relevance check only."""
@@ -300,17 +302,17 @@ class TestRespectifyAsyncClient:
             self.test_article_id,
             include_relevance=True
         )
-        
+
         assert isinstance(result, MegaCallResult)
-        assert isinstance(result.relevance, CommentRelevanceResult)
-        assert isinstance(result.relevance.on_topic.is_on_topic, bool)
-        assert isinstance(result.relevance.on_topic.confidence, float)
-        
+        assert isinstance(result.relevance_check, CommentRelevanceResult)
+        assert isinstance(result.relevance_check.on_topic.on_topic, bool)
+        assert isinstance(result.relevance_check.on_topic.confidence, float)
+
         # Other services should be None
-        assert result.spam is None
+        assert result.spam_check is None
         assert result.comment_score is None
-        assert result.dogwhistle is None
-    
+        assert result.dogwhistle_check is None
+
     @pytest.mark.asyncio
     async def test_megacall_comment_score_only_success(self):
         """Test successful megacall with comment scoring only."""
@@ -319,7 +321,7 @@ class TestRespectifyAsyncClient:
             self.test_article_id,
             include_comment_score=True
         )
-        
+
         assert isinstance(result, MegaCallResult)
         assert isinstance(result.comment_score, CommentScore)
         assert isinstance(result.comment_score.logical_fallacies, list)
@@ -330,12 +332,12 @@ class TestRespectifyAsyncClient:
         assert 1 <= result.comment_score.overall_score <= 5
         assert isinstance(result.comment_score.toxicity_score, float)
         assert 0.0 <= result.comment_score.toxicity_score <= 1.0
-        
+
         # Other services should be None
-        assert result.spam is None
-        assert result.relevance is None
-        assert result.dogwhistle is None
-    
+        assert result.spam_check is None
+        assert result.relevance_check is None
+        assert result.dogwhistle_check is None
+
     @pytest.mark.asyncio
     async def test_megacall_all_services_success(self):
         """Test successful megacall with all services."""
@@ -347,28 +349,28 @@ class TestRespectifyAsyncClient:
             include_comment_score=True,
             include_dogwhistle=True
         )
-        
+
         assert isinstance(result, MegaCallResult)
-        
+
         # All services should be present
-        assert isinstance(result.spam, SpamDetectionResult)
-        assert isinstance(result.relevance, CommentRelevanceResult)
+        assert isinstance(result.spam_check, SpamDetectionResult)
+        assert isinstance(result.relevance_check, CommentRelevanceResult)
         assert isinstance(result.comment_score, CommentScore)
-        assert isinstance(result.dogwhistle, DogwhistleResult)
-        
+        assert isinstance(result.dogwhistle_check, DogwhistleResult)
+
         # Basic validation for each service
-        assert isinstance(result.spam.is_spam, bool)
-        assert isinstance(result.relevance.on_topic.is_on_topic, bool)
+        assert isinstance(result.spam_check.is_spam, bool)
+        assert isinstance(result.relevance_check.on_topic.on_topic, bool)
         assert isinstance(result.comment_score.overall_score, int)
         assert isinstance(result.comment_score.toxicity_score, float)
-        assert isinstance(result.dogwhistle.detection.dogwhistles_detected, bool)
-        
-        print(f"\nAsync megacall all services: spam={result.spam.confidence:.2f}, "
-              f"relevance={result.relevance.on_topic.confidence:.2f}, "
+        assert isinstance(result.dogwhistle_check.detection.dogwhistles_detected, bool)
+
+        print(f"\nAsync megacall all services: spam={result.spam_check.confidence:.2f}, "
+              f"relevance={result.relevance_check.on_topic.confidence:.2f}, "
               f"score={result.comment_score.overall_score}/5, "
               f"toxicity={result.comment_score.toxicity_score:.2f}, "
-              f"dogwhistle={result.dogwhistle.detection.confidence:.2f}")
-    
+              f"dogwhistle={result.dogwhistle_check.detection.confidence:.2f}")
+
     @pytest.mark.asyncio
     async def test_megacall_with_parameters_success(self):
         """Test successful megacall with additional parameters."""
@@ -383,15 +385,15 @@ class TestRespectifyAsyncClient:
             sensitive_topics=['test topic'],
             dogwhistle_examples=['example phrase']
         )
-        
+
         assert isinstance(result, MegaCallResult)
         assert all([
-            result.spam is not None,
-            result.relevance is not None,
+            result.spam_check is not None,
+            result.relevance_check is not None,
             result.comment_score is not None,
-            result.dogwhistle is not None
+            result.dogwhistle_check is not None
         ])
-        
+
         print("\nAsync megacall with all parameters succeeded")
     
     @pytest.mark.asyncio
