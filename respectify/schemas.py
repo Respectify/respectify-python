@@ -9,12 +9,12 @@ from pydantic import BaseModel, Field, ConfigDict
 
 class LogicalFallacy(BaseModel):
     """Represents a logical fallacy identified in a comment."""
-    
+
     model_config = ConfigDict(frozen=True)
-    
+
     fallacy_name: str = Field(..., description="The name of the logical fallacy, e.g., 'straw man'")
     quoted_logical_fallacy_example: str = Field(..., description="The part of the comment that contains the logical fallacy")
-    explanation_and_suggestions: str = Field(..., description="Explanation of the fallacy and suggestions for improvement")
+    explanation: str = Field(..., description="Explanation of the fallacy and suggestions for improvement")
     suggested_rewrite: str = Field(..., description="Suggested rewrite of the fallacious content")
 
 

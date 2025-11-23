@@ -107,6 +107,22 @@ For feature-focused documentation with examples, see:
         return False
 
 
+def run_schema_generator():
+    """Run the schema generator to update PHP schemas and docs."""
+    try:
+        print("📝 Generating schemas from Python source of truth...")
+
+        schema_gen_path = Path(__file__).parent / "schema_generator.py"
+
+        subprocess.run(["python", str(schema_gen_path)], check=True)
+        print("✅ Schemas generated successfully.")
+        return True
+
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error running schema generator: {e}")
+        return False
+
+
 def main():
     """Main build function."""
     print("🔨 Building Python API Reference Documentation")
@@ -115,6 +131,10 @@ def main():
     # Check if we're in the right directory
     if not (Path(__file__).parent / "respectify").exists():
         print("❌ Error: Must run from respectify-python root directory")
+        sys.exit(1)
+
+    # Generate schemas first (updates PHP and docs)
+    if not run_schema_generator():
         sys.exit(1)
 
     # Generate documentation
