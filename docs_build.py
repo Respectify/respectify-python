@@ -1,15 +1,14 @@
 """
-Build script for Respectify Python library documentation.
+Sphinx documentation build script for Python API reference generation.
 
-This script:
-1. Generates documentation using Sphinx 
-2. Copies the generated docs to the docgen folder for Docusaurus integration
-3. Matches the pattern used by the PHP library build system
+This generates comprehensive API reference documentation from Python source code
+and copies it to the main documentation site under /reference/api/python/.
+
+This complements the feature-centric docs which explain concepts with examples.
 """
 
 import subprocess
 import shutil
-import os
 import sys
 from pathlib import Path
 
@@ -18,16 +17,16 @@ def run_sphinx():
     """Generate documentation using Sphinx."""
     try:
         print("Generating Python documentation with Sphinx...")
-        
+
         # Change to docs directory
         docs_dir = Path(__file__).parent / "docs"
-        
+
         # Clean previous build
         build_dir = docs_dir / "_build"
         if build_dir.exists():
             shutil.rmtree(build_dir)
             print("Cleaned previous build directory")
-        
+
         # Generate HTML docs
         subprocess.run([
             "sphinx-build",
@@ -36,10 +35,10 @@ def run_sphinx():
             str(docs_dir), # Source directory
             str(build_dir / "html")  # Output directory
         ], check=True, cwd=docs_dir.parent)
-        
+
         print("✅ Sphinx documentation generated successfully")
         return True
-        
+
     except subprocess.CalledProcessError as e:
         print(f"❌ Error running Sphinx: {e}")
         return False
@@ -49,88 +48,60 @@ def run_sphinx():
 
 
 def copy_docs():
-    """Copy generated docs to the docgen folder for Docusaurus integration."""
+    """Copy generated docs to the Docusaurus API reference folder."""
     try:
-        print("Copying Python docs to docgen folder...")
-        
+        print("Copying Python docs to API reference folder...")
+
         src_folder = Path(__file__).parent / "docs" / "_build" / "html"
-        dest_folder = Path(__file__).parent.parent / "discussion-arena-docgen" / "respectify-docs" / "docs" / "Python"
-        
+        dest_folder = Path(__file__).parent.parent / "discussion-arena-docgen" / "respectify-docs" / "docs" / "reference" / "api" / "python"
+
         if not src_folder.exists():
             print(f"❌ Error: Source folder does not exist: {src_folder}")
             return False
-            
+
         dest_folder_full_path = dest_folder.resolve()
-        print(f"📁 Destination: {dest_folder_full_path}")
-        
+        print(f"📁 Copying to: {dest_folder_full_path}")
+
         # Remove existing Python docs
         if dest_folder.exists():
             shutil.rmtree(dest_folder)
-            print("🧹 Removed existing Python docs")
-        
+            print("🧹 Removed existing Python API docs")
+
         # Create destination directory
         dest_folder.mkdir(parents=True, exist_ok=True)
-        
-        # Copy all generated HTML files as static content
-        # For Docusaurus integration, we need to convert HTML to markdown or create index files
-        
-        # For now, let's copy the HTML and create an index.md that links to it
-        shutil.copytree(src_folder, dest_folder / "html", dirs_exist_ok=True)
-        
-        # Create a main index.md for Docusaurus
-        index_content = """# Python Library Documentation
 
-The Respectify Python library provides both synchronous and asynchronous clients for the Respectify API.
+        # Copy all generated HTML files
+        shutil.copytree(src_folder, dest_folder / "html", dirs_exist_ok=True)
+
+        # Create a main index.md for Docusaurus navigation
+        index_content = """---
+sidebar_position: 1
+---
+
+# Python API Reference
+
+Complete API reference for the Respectify Python library, auto-generated from source code.
+
+## Browse API Documentation
+
+- [**Full API Documentation**](./html/index.html) - Complete documentation with all modules
+- [**Client Classes**](./html/api/clients.html) - RespectifyClient and RespectifyClientAsync
+- [**Schemas**](./html/api/schemas.html) - All response and request models
+- [**Exceptions**](./html/api/exceptions.html) - Error types and handling
 
 ## Quick Links
 
-- [Full Documentation](./html/index.html) - Complete documentation with examples
-- [API Reference](./html/api/clients.html) - Client classes and methods
-- [Examples](./html/examples/basic_usage.html) - Usage examples and patterns
-
-## Installation
-
-```bash
-pip install respectify
-```
-
-## Quick Start
-
-```python
-from respectify import RespectifyClient
-
-client = RespectifyClient(
-    email="your-email@example.com",
-    api_key="your-api-key"
-)
-
-# Initialize a topic
-topic = client.init_topic_from_text("This is my article content")
-
-# Check if a comment is spam
-result = client.check_spam("Great post!", topic.article_id)
-print(f"Is spam: {result.is_spam}")
-```
-
-## Features
-
-- 🔄 **Dual Interface**: Both synchronous and asynchronous clients
-- 🛡️ **Type Safety**: Full type hints with Pydantic validation  
-- 📊 **Comprehensive**: All Respectify API endpoints supported
-- ⚡ **Efficient**: Megacall support for batch operations
-- 🚨 **Error Handling**: Custom exceptions for different API conditions
-
-## Repository
-
-- [GitHub Repository](https://github.com/respectify/respectify-python)
-- [PyPI Package](https://pypi.org/project/respectify/)
+For feature-focused documentation with examples, see:
+- [Getting Started](/docs/getting-started/installation)
+- [Features](/docs/features/spam-detection)
+- [Schema Reference](/docs/reference/schemas/) (field-by-field with language tabs)
 """
-        
+
         (dest_folder / "index.md").write_text(index_content)
-        
-        print("✅ Python docs copied successfully")
+
+        print("✅ Python API reference docs copied successfully.")
         return True
-        
+
     except Exception as e:
         print(f"❌ Error copying docs: {e}")
         return False
@@ -138,30 +109,26 @@ print(f"Is spam: {result.is_spam}")
 
 def main():
     """Main build function."""
-    print("🐍 Building Respectify Python Library Documentation")
+    print("🔨 Building Python API Reference Documentation")
     print("=" * 60)
-    
+
     # Check if we're in the right directory
     if not (Path(__file__).parent / "respectify").exists():
         print("❌ Error: Must run from respectify-python root directory")
         sys.exit(1)
-    
+
     # Generate documentation
     if not run_sphinx():
         sys.exit(1)
-    
+
     # Copy to docgen folder
     if not copy_docs():
         sys.exit(1)
-        
+
     print("=" * 60)
-    print("🎉 Build completed successfully!")
+    print("✅ Build completed successfully!")
     print()
-    print("Next steps:")
-    print("1. cd ../discussion-arena-docgen/respectify-docs")
-    print("2. npm install  # (if needed)")
-    print("3. npm start    # Preview the documentation")
-    print("4. npm run build # Build for production")
+    print("API reference available at: /docs/reference/api/python/")
 
 
 if __name__ == "__main__":
