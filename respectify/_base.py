@@ -22,7 +22,7 @@ T = TypeVar('T', bound=BaseModel)
 class BaseRespectifyClient:
     """Base client with shared functionality for authentication and error handling."""
     
-    DEFAULT_BASE_URL: str = "https://app.respectify.org"
+    DEFAULT_BASE_URL: str = "https://app.respectify.ai"
     DEFAULT_VERSION: str = "0.2"
     
     @beartype

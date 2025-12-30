@@ -51,7 +51,7 @@ class TestRespectifyAsyncClient:
             base_url=cls.base_url
         )
         
-        print(f"\nUsing async real API with email: {cls.email} at {cls.base_url or 'https://app.respectify.org (default)'}")
+        print(f"\nUsing async real API with email: {cls.email} at {cls.base_url or 'https://app.respectify.ai (default)'}")
         
         # Test credentials immediately during setup using asyncio
         print("🔐 Testing async credentials during setup...")

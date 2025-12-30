@@ -50,7 +50,7 @@ class TestRespectifyClient:
             base_url=cls.base_url
         )
         
-        print(f"\nUsing real API with email: {cls.email} at {cls.base_url or 'https://app.respectify.org (default)'}")
+        print(f"\nUsing real API with email: {cls.email} at {cls.base_url or 'https://app.respectify.ai (default)'}")
         
         # Test credentials immediately during setup
         print("🔐 Testing credentials during setup...")

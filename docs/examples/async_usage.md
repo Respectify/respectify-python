@@ -13,7 +13,7 @@ async def main():
     client = RespectifyAsyncClient(
         email="your-email@example.com",
         api_key="your-api-key",
-        base_url="https://app.respectify.org",  # Optional
+        base_url="https://app.respectify.ai",  # Optional
         timeout=30.0  # Optional
     )
 ```

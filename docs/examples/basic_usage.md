@@ -11,7 +11,7 @@ from respectify import RespectifyClient
 client = RespectifyClient(
     email="your-email@example.com",
     api_key="your-api-key",
-    base_url="https://app.respectify.org",  # Optional, defaults to production
+    base_url="https://app.respectify.ai",  # Optional, defaults to production
     timeout=30.0  # Optional, timeout in seconds
 )
 ```
