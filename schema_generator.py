@@ -325,6 +325,9 @@ class MarkdownGenerator:
             "sidebar_position: 1",
             "---",
             "",
+            "import Tabs from '@theme/Tabs';",
+            "import TabItem from '@theme/TabItem';",
+            "",
             f"# {schema.name}",
             "",
             schema.docstring,
@@ -359,9 +362,6 @@ class MarkdownGenerator:
                 lines.append("")
 
             # Language-specific access
-            lines.append("import Tabs from '@theme/Tabs';")
-            lines.append("import TabItem from '@theme/TabItem';")
-            lines.append("")
             lines.append('<Tabs groupId="language">')
             lines.append('  <TabItem value="python" label="Python">')
             lines.append("")
