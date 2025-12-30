@@ -158,12 +158,14 @@ class InitTopicResponse(BaseModel):
 
 class UserSubscriptionStatus(BaseModel):
     """Information about a user's subscription status."""
-    
+
     # Note: Not frozen - server needs to mutate this object
-    
+
     active: bool = Field(..., description="Whether the subscription is active")
     status: Optional[str] = Field(None, description="Current subscription status")
     expires: Optional[str] = Field(None, description="Subscription expiration date")
+    plan_name: Optional[str] = Field(None, description="Name of the subscription plan (e.g., 'Personal', 'Professional', 'Anti-Spam Only')")
+    allowed_endpoints: Optional[List[str]] = Field(None, description="List of API endpoints allowed for this plan (e.g., ['antispam', 'commentscore'])")
     error: Optional[str] = Field(None, description="Error message if any")
 
 
