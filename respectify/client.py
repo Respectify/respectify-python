@@ -310,13 +310,14 @@ class RespectifyClient(BaseRespectifyClient):
     
     @beartype
     def check_user_credentials(self) -> UserCheckResponse:
-        """Verify user credentials and check account status.
-        
+        """Verify user credentials and check subscription status.
+
         Returns:
-            UserCheckResponse containing authentication result
-            
+            UserCheckResponse containing subscription status (active, plan_name, etc.)
+
         Raises:
-            RespectifyError: If the request fails with invalid credentials
+            AuthenticationError: If credentials are invalid (401)
+            RespectifyError: If the request fails for other reasons
         """
         url: str = self._build_url("usercheck")
         headers: Dict[str, str] = self._build_headers()
@@ -324,8 +325,7 @@ class RespectifyClient(BaseRespectifyClient):
         with httpx.Client(timeout=self.timeout) as client:
             response: httpx.Response = client.get(url, headers=headers)
 
-            # Accept both 200 (valid with subscription) and 402 (valid without subscription)
-            if response.status_code not in [200, 402]:
+            if response.status_code != 200:
                 self._handle_error_response(response)
 
             return self._parse_response(response, UserCheckResponse)

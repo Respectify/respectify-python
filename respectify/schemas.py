@@ -156,8 +156,12 @@ class InitTopicResponse(BaseModel):
     article_id: UUID = Field(..., description="UUID of the initialized article/topic")
 
 
-class UserSubscriptionStatus(BaseModel):
-    """Information about a user's subscription status."""
+class UserCheckResponse(BaseModel):
+    """Response from the usercheck endpoint containing subscription status.
+
+    This is returned directly as the API response - no wrapper needed since
+    HTTP 200 indicates success and HTTP 4xx indicates errors.
+    """
 
     # Note: Not frozen - server needs to mutate this object
 
@@ -166,21 +170,10 @@ class UserSubscriptionStatus(BaseModel):
     expires: Optional[str] = Field(None, description="Subscription expiration date")
     plan_name: Optional[str] = Field(None, description="Name of the subscription plan (e.g., 'Personal', 'Professional', 'Anti-Spam Only')")
     allowed_endpoints: Optional[List[str]] = Field(None, description="List of API endpoints allowed for this plan (e.g., ['antispam', 'commentscore'])")
-    error: Optional[str] = Field(None, description="Error message if any")
+    error: Optional[str] = Field(None, description="Error message if subscription check failed")
 
 
-class UserCheckResponse(BaseModel):
-    """Represents the response from checking user credentials."""
-    
-    # Note: Not frozen - server constructs this directly
-    
-    # Standard production response fields
-    success: Optional[str] = Field(None, description="Success status as string")
-    info: Optional[str] = Field(None, description="Information message about the check")
-    subscription: Optional[UserSubscriptionStatus] = Field(None, description="User subscription information")
-    
-    # Alternative staging response fields (when subscription required)
-    title: Optional[str] = Field(None, description="Error title when subscription required")
-    description: Optional[str] = Field(None, description="Error description when subscription required")
+# Backwards compatibility alias
+UserSubscriptionStatus = UserCheckResponse
 
 
