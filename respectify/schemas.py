@@ -15,7 +15,7 @@ class LogicalFallacy(BaseModel):
     fallacy_name: str = Field(..., description="The name of the logical fallacy, e.g., 'straw man'")
     quoted_logical_fallacy_example: str = Field(..., description="The part of the comment that contains the logical fallacy")
     explanation: str = Field(..., description="Explanation of the fallacy and suggestions for improvement")
-    suggested_rewrite: str = Field(..., description="Suggested rewrite of the fallacious content")
+    suggested_rewrite: str = Field(..., description="Suggested rewrite (only provided when comment appears good-faith; otherwise empty)")
 
 
 class ObjectionablePhrase(BaseModel):
@@ -25,7 +25,7 @@ class ObjectionablePhrase(BaseModel):
     
     quoted_objectionable_phrase: str = Field(..., description="The objectionable phrase found in the comment")
     explanation: str = Field(..., description="Explanation of why this phrase is objectionable")
-    suggested_rewrite: str = Field(..., description="Suggested rewrite of the objectionable content")
+    suggested_rewrite: str = Field(..., description="Suggested rewrite (only provided when comment appears good-faith; otherwise empty)")
 
 
 class NegativeTonePhrase(BaseModel):
@@ -35,7 +35,7 @@ class NegativeTonePhrase(BaseModel):
     
     quoted_negative_tone_phrase: str = Field(..., description="The phrase with negative tone")
     explanation: str = Field(..., description="Explanation of the negative tone")
-    suggested_rewrite: str = Field(..., description="Suggested rewrite with more positive tone")
+    suggested_rewrite: str = Field(..., description="Suggested rewrite (only provided when comment appears good-faith; otherwise empty)")
 
 
 class CommentScore(BaseModel):
@@ -47,8 +47,8 @@ class CommentScore(BaseModel):
     objectionable_phrases: List[ObjectionablePhrase] = Field(default_factory=list, description="List of objectionable phrases found") 
     negative_tone_phrases: List[NegativeTonePhrase] = Field(default_factory=list, description="List of phrases with negative tone")
     appears_low_effort: bool = Field(..., description="Whether the comment appears to be low effort")
-    overall_score: int = Field(..., ge=1, le=5, description="Overall quality score from 1 to 5")
-    toxicity_score: float = Field(..., ge=0.0, le=1.0, description="Toxicity score from 0.0 to 1.0")
+    overall_score: int = Field(..., ge=1, le=5, description="Overall quality score (1=poor, 5=excellent)")
+    toxicity_score: float = Field(..., ge=0.0, le=1.0, description="Toxicity score (0.0=not toxic, 1.0=highly toxic)")
     toxicity_explanation: str = Field(..., description="Educational explanation of toxicity issues found")
 
 
@@ -59,7 +59,7 @@ class SpamDetectionResult(BaseModel):
     
     reasoning: str = Field(..., description="Explanation of the spam analysis")
     is_spam: bool = Field(..., description="Whether the comment is detected as spam")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence level of spam detection")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence level (0.0=low, 1.0=high)")
 
 
 class OnTopicResult(BaseModel):
@@ -68,8 +68,8 @@ class OnTopicResult(BaseModel):
     model_config = ConfigDict(frozen=True)
     
     reasoning: str = Field(..., description="Explanation of the relevance analysis")
-    on_topic: bool = Field(..., description="Whether the comment is on-topic") 
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence level of relevance detection")
+    on_topic: bool = Field(..., description="Whether the comment is on-topic")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence level (0.0=low, 1.0=high)")
 
 
 class BannedTopicsResult(BaseModel):
@@ -79,8 +79,8 @@ class BannedTopicsResult(BaseModel):
     
     reasoning: str = Field(..., description="Explanation of the banned topics analysis")
     banned_topics: List[str] = Field(default_factory=list, description="List of banned topics detected")
-    quantity_on_banned_topics: float = Field(..., ge=0.0, le=1.0, description="Proportion of comment discussing banned topics")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence level of banned topics detection")
+    quantity_on_banned_topics: float = Field(..., ge=0.0, le=1.0, description="Proportion discussing banned topics (0.0=none, 1.0=entirely)")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence level (0.0=low, 1.0=high)")
 
 
 class CommentRelevanceResult(BaseModel):
@@ -99,7 +99,7 @@ class DogwhistleDetection(BaseModel):
     
     reasoning: str = Field(..., description="Explanation of the dogwhistle analysis")
     dogwhistles_detected: bool = Field(..., description="Whether dogwhistles were detected")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence level of detection")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence level (0.0=low, 1.0=high)")
 
 
 class DogwhistleDetails(BaseModel):
@@ -109,8 +109,8 @@ class DogwhistleDetails(BaseModel):
     
     dogwhistle_terms: List[str] = Field(default_factory=list, description="Specific dogwhistle terms detected")
     categories: List[str] = Field(default_factory=list, description="Categories of dogwhistles detected")
-    subtlety_level: float = Field(..., ge=0.0, le=1.0, description="How subtle the dogwhistles are")
-    harm_potential: float = Field(..., ge=0.0, le=1.0, description="Potential harm level of the dogwhistles")
+    subtlety_level: float = Field(..., ge=0.0, le=1.0, description="Subtlety level (0.0=obvious, 1.0=very subtle)")
+    harm_potential: float = Field(..., ge=0.0, le=1.0, description="Potential harm level (0.0=low, 1.0=high)")
 
 
 class DogwhistleResult(BaseModel):
@@ -127,10 +127,10 @@ class MegaCallResult(BaseModel):
 
     # Note: Not frozen - server mutates fields after creation
 
-    comment_score: Optional[CommentScore] = Field(None, description="Comment score result, if requested")
-    spam_check: Optional[SpamDetectionResult] = Field(None, description="Spam detection result, if requested")
-    relevance_check: Optional[CommentRelevanceResult] = Field(None, description="Comment relevance result, if requested")
-    dogwhistle_check: Optional[DogwhistleResult] = Field(None, description="Dogwhistle detection result, if requested")
+    comment_score: Optional[CommentScore] = Field(None, description="Comment score result. Null unless requested via include_comment_score (Python) or 'commentscore' service (PHP).")
+    spam_check: Optional[SpamDetectionResult] = Field(None, description="Spam detection result. Null unless requested via include_spam (Python) or 'spam' service (PHP).")
+    relevance_check: Optional[CommentRelevanceResult] = Field(None, description="Comment relevance result. Null unless requested via include_relevance (Python) or 'relevance' service (PHP).")
+    dogwhistle_check: Optional[DogwhistleResult] = Field(None, description="Dogwhistle detection result. Null unless requested via include_dogwhistle (Python) or 'dogwhistle' service (PHP).")
 
     @property
     def spam(self) -> Optional[SpamDetectionResult]:
