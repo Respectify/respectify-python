@@ -110,27 +110,28 @@ class RespectifyClient(BaseRespectifyClient):
             return self._parse_response(response, InitTopicResponse)
     
     @beartype
-    def check_spam(self, comment: str, article_id: UUID) -> SpamDetectionResult:
+    def check_spam(self, comment: str, article_id: Optional[UUID] = None) -> SpamDetectionResult:
         """Check if a comment is spam.
-        
+
         Args:
             comment: The comment text to check
-            article_id: UUID of the article/topic
-            
+            article_id: Optional UUID of the article/topic for context
+
         Returns:
             SpamDetectionResult containing spam analysis
-            
+
         Raises:
             RespectifyError: If the request fails
         """
         url: str = self._build_url("antispam")
         headers: Dict[str, str] = self._build_headers()
-        
+
         data: Dict[str, str] = {
             "comment": comment,
-            "article_context_id": str(article_id)
         }
-        
+        if article_id is not None:
+            data["article_context_id"] = str(article_id)
+
         with httpx.Client(timeout=self.timeout) as client:
             response: httpx.Response = client.post(url, json=data, headers=headers)
             
@@ -178,27 +179,35 @@ class RespectifyClient(BaseRespectifyClient):
             return self._parse_response(response, CommentRelevanceResult)
     
     @beartype
-    def evaluate_comment(self, comment: str, article_id: UUID) -> CommentScore:
+    def evaluate_comment(
+        self,
+        comment: str,
+        article_id: UUID,
+        reply_to_comment: Optional[str] = None
+    ) -> CommentScore:
         """Evaluate a comment's quality and toxicity.
-        
+
         Args:
             comment: The comment text to evaluate
             article_id: UUID of the article/topic
-            
+            reply_to_comment: Optional text of the comment being replied to, for context
+
         Returns:
             CommentScore containing comprehensive evaluation
-            
+
         Raises:
             RespectifyError: If the request fails
         """
         url: str = self._build_url("commentscore")
         headers: Dict[str, str] = self._build_headers()
-        
+
         data: Dict[str, str] = {
             "comment": comment,
             "article_context_id": str(article_id)
         }
-        
+        if reply_to_comment is not None:
+            data["reply_to_comment"] = reply_to_comment
+
         with httpx.Client(timeout=self.timeout) as client:
             response: httpx.Response = client.post(url, json=data, headers=headers)
             
@@ -260,7 +269,8 @@ class RespectifyClient(BaseRespectifyClient):
         include_dogwhistle: bool = False,
         banned_topics: Optional[List[str]] = None,
         sensitive_topics: Optional[List[str]] = None,
-        dogwhistle_examples: Optional[List[str]] = None
+        dogwhistle_examples: Optional[List[str]] = None,
+        reply_to_comment: Optional[str] = None
     ) -> MegaCallResult:
         """Perform multiple analysis types in a single API call.
 
@@ -274,6 +284,7 @@ class RespectifyClient(BaseRespectifyClient):
             banned_topics: Optional list of banned topics for relevance check
             sensitive_topics: Optional list of sensitive topics for dogwhistle check
             dogwhistle_examples: Optional list of dogwhistle examples
+            reply_to_comment: Optional text of the comment being replied to, for comment score context
 
         Returns:
             MegaCallResult containing requested analysis results
@@ -299,6 +310,8 @@ class RespectifyClient(BaseRespectifyClient):
             data["sensitive_topics"] = sensitive_topics
         if dogwhistle_examples:
             data["dogwhistle_examples"] = dogwhistle_examples
+        if reply_to_comment is not None:
+            data["reply_to_comment"] = reply_to_comment
 
         with httpx.Client(timeout=self.timeout) as client:
             response: httpx.Response = client.post(url, json=data, headers=headers)

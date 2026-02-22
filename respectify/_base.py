@@ -1,5 +1,6 @@
 """Base client functionality shared between sync and async clients."""
 
+from html import escape as html_escape
 from typing import Any, Dict, Optional, Type, TypeVar, Union
 from urllib.parse import urljoin
 
@@ -17,6 +18,29 @@ from respectify.exceptions import (
 )
 
 T = TypeVar('T', bound=BaseModel)
+
+
+def _sanitize_string(value: str) -> str:
+    """HTML-encode a string to prevent XSS.
+
+    API responses echo back user-submitted comment text (in quoted fallacies,
+    objectionable phrases, etc.) which must be encoded to prevent XSS when
+    rendered in HTML.
+
+    Uses stdlib html.escape with quote=True to encode &, <, >, ", and '.
+    """
+    return html_escape(value, quote=True)
+
+
+def _sanitize_data(data: Any) -> Any:
+    """Recursively HTML-encode all string values in API response data."""
+    if isinstance(data, str):
+        return _sanitize_string(data)
+    if isinstance(data, list):
+        return [_sanitize_data(item) for item in data]
+    if isinstance(data, dict):
+        return {key: _sanitize_data(value) for key, value in data.items()}
+    return data
 
 
 class BaseRespectifyClient:
@@ -104,8 +128,15 @@ class BaseRespectifyClient:
         error_message: str
         if response_data and isinstance(response_data, dict):
             # The server's error handler sends {error, message, code} for API routes.
+            # Use 'message' as the primary error text (human-readable detail).
+            # The 'error' field (category title) is available via response_data.
             # Also check 'description' (raw Falcon format) and 'detail' as fallbacks.
-            error_message = response_data.get('message', response_data.get('description', response_data.get('detail', f"HTTP {status_code}: {response.reason_phrase}")))
+            error_message = (
+                response_data.get('message')
+                or response_data.get('description')
+                or response_data.get('detail')
+                or f"HTTP {status_code}: {response.reason_phrase}"
+            )
         else:
             error_message = f"HTTP {status_code}: {response.reason_phrase}"
         
@@ -139,6 +170,7 @@ class BaseRespectifyClient:
         """
         try:
             response_data: Dict[str, Any] = response.json()
+            response_data = _sanitize_data(response_data)
             return schema_class.model_validate(response_data)
         except Exception as e:
             raise RespectifyError(

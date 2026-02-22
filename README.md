@@ -151,6 +151,10 @@ except BadRequestError as e:
     print(f"Invalid request: {e.message}")
 ```
 
+### Response Sanitization
+
+All string values in API responses are automatically HTML-encoded to prevent XSS. API responses echo back user-submitted comment text (in quoted fallacies, objectionable phrases, etc.) so this encoding is applied by default to make responses safe to render in HTML.
+
 ## Configuration
 
 ### Client Options

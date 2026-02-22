@@ -59,28 +59,28 @@ class SpamDetectionResult(BaseModel):
     
     reasoning: str = Field(..., description="Explanation of the spam analysis")
     is_spam: bool = Field(..., description="Whether the comment is detected as spam")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence level (0.0=low, 1.0=high)")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence in the verdict (0.0=uncertain, 1.0=certain the verdict is correct)")
 
 
 class OnTopicResult(BaseModel):
     """Represents whether a comment is on-topic."""
-    
+
     model_config = ConfigDict(frozen=True)
-    
+
     reasoning: str = Field(..., description="Explanation of the relevance analysis")
     on_topic: bool = Field(..., description="Whether the comment is on-topic")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence level (0.0=low, 1.0=high)")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence in the verdict (0.0=uncertain, 1.0=certain the verdict is correct)")
 
 
 class BannedTopicsResult(BaseModel):
     """Represents analysis of banned topics in a comment."""
-    
+
     model_config = ConfigDict(frozen=True)
-    
+
     reasoning: str = Field(..., description="Explanation of the banned topics analysis")
     banned_topics: List[str] = Field(default_factory=list, description="List of banned topics detected")
     quantity_on_banned_topics: float = Field(..., ge=0.0, le=1.0, description="Proportion discussing banned topics (0.0=none, 1.0=entirely)")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence level (0.0=low, 1.0=high)")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence in the verdict (0.0=uncertain, 1.0=certain the verdict is correct)")
 
 
 class CommentRelevanceResult(BaseModel):
@@ -99,7 +99,7 @@ class DogwhistleDetection(BaseModel):
     
     reasoning: str = Field(..., description="Explanation of the dogwhistle analysis")
     dogwhistles_detected: bool = Field(..., description="Whether dogwhistles were detected")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence level (0.0=low, 1.0=high)")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence in the verdict (0.0=uncertain, 1.0=certain the verdict is correct)")
 
 
 class DogwhistleDetails(BaseModel):
