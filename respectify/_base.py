@@ -103,9 +103,9 @@ class BaseRespectifyClient:
         # Extract error message
         error_message: str
         if response_data and isinstance(response_data, dict):
-            # Check common error message fields: 'message' and 'detail' are conventional,
-            # 'description' is what Falcon (the server framework) uses for HTTPError responses
-            error_message = response_data.get('message', response_data.get('detail', response_data.get('description', f"HTTP {status_code}: {response.reason_phrase}")))
+            # 'description' is what Falcon (the server framework) uses for HTTPError responses.
+            # Also check 'message' and 'detail' as conventional REST API error fields.
+            error_message = response_data.get('description', response_data.get('message', response_data.get('detail', f"HTTP {status_code}: {response.reason_phrase}")))
         else:
             error_message = f"HTTP {status_code}: {response.reason_phrase}"
         
