@@ -12,7 +12,9 @@ from respectify.schemas import (
     CommentScore,
     DogwhistleResult,
     InitTopicResponse,
+    LlmDetectionResult,
     MegaCallResult,
+    PerspectiveResult,
     SpamDetectionResult,
     UserCheckResponse,
 )
@@ -262,29 +264,35 @@ class RespectifyAsyncClient(BaseRespectifyClient):
     async def megacall(
         self,
         comment: str,
-        article_id: UUID,
+        article_id: Optional[UUID] = None,
         include_spam: bool = False,
         include_relevance: bool = False,
         include_comment_score: bool = False,
         include_dogwhistle: bool = False,
+        include_perspective: bool = False,
+        include_llm_detection: bool = False,
         banned_topics: Optional[List[str]] = None,
         sensitive_topics: Optional[List[str]] = None,
         dogwhistle_examples: Optional[List[str]] = None,
-        reply_to_comment: Optional[str] = None
+        reply_to_comment: Optional[str] = None,
+        context_comments: Optional[List[str]] = None
     ) -> MegaCallResult:
         """Perform multiple analysis types in a single API call.
 
         Args:
             comment: The comment text to analyze
-            article_id: UUID of the article/topic
+            article_id: UUID of the article/topic (required for comment_score, relevance, dogwhistle)
             include_spam: Include spam detection analysis
             include_relevance: Include relevance analysis
             include_comment_score: Include comment quality scoring
             include_dogwhistle: Include dogwhistle detection
+            include_perspective: Include Perspective-compatible attribute scoring
+            include_llm_detection: Include LLM-likeness detection
             banned_topics: Optional list of banned topics for relevance check
             sensitive_topics: Optional list of sensitive topics for dogwhistle check
             dogwhistle_examples: Optional list of dogwhistle examples
             reply_to_comment: Optional text of the comment being replied to, for comment score context
+            context_comments: Optional prior comments for perspective context
 
         Returns:
             MegaCallResult containing requested analysis results
@@ -297,13 +305,16 @@ class RespectifyAsyncClient(BaseRespectifyClient):
 
         data: Dict[str, Union[str, bool, List[str]]] = {
             "comment": comment,
-            "article_context_id": str(article_id),
             "run_spam_check": include_spam,
             "run_relevance_check": include_relevance,
             "run_comment_score": include_comment_score,
-            "run_dogwhistle_check": include_dogwhistle
+            "run_dogwhistle_check": include_dogwhistle,
+            "run_perspective": include_perspective,
+            "run_llm_detect": include_llm_detection,
         }
 
+        if article_id:
+            data["article_context_id"] = str(article_id)
         if banned_topics:
             data["banned_topics"] = banned_topics
         if sensitive_topics:
@@ -312,6 +323,8 @@ class RespectifyAsyncClient(BaseRespectifyClient):
             data["dogwhistle_examples"] = dogwhistle_examples
         if reply_to_comment is not None:
             data["reply_to_comment"] = reply_to_comment
+        if context_comments:
+            data["context_comments"] = context_comments
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response: httpx.Response = await client.post(url, json=data, headers=headers)
@@ -321,6 +334,124 @@ class RespectifyAsyncClient(BaseRespectifyClient):
 
             return self._parse_response(response, MegaCallResult)
     
+    @beartype
+    async def evaluate_perspective(
+        self,
+        comment: str,
+        article_id: Optional[UUID] = None,
+        context_comments: Optional[List[str]] = None,
+        requested_attributes: Optional[List[str]] = None,
+    ) -> PerspectiveResult:
+        """Score a comment on Perspective-compatible attributes (toxicity, bridging, etc).
+
+        Args:
+            comment: The comment text to score
+            article_id: Optional UUID of the article/topic for context
+            context_comments: Optional list of prior comments for conversation context
+            requested_attributes: Optional list of specific attributes to score
+
+        Returns:
+            PerspectiveResult with scores for all 16 attributes
+
+        Raises:
+            RespectifyError: If the request fails
+        """
+        url: str = self._build_url("perspective")
+        headers: Dict[str, str] = self._build_headers()
+
+        data: Dict[str, Union[str, List[str]]] = {"comment": comment}
+        if article_id:
+            data["article_context_id"] = str(article_id)
+        if context_comments:
+            data["context_comments"] = context_comments
+        if requested_attributes:
+            data["requested_attributes"] = requested_attributes
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response: httpx.Response = await client.post(url, json=data, headers=headers)
+
+            if response.status_code != 200:
+                self._handle_error_response(response)
+
+            return self._parse_response(response, PerspectiveResult)
+
+    @beartype
+    async def check_llm_likeness(
+        self,
+        comment: str,
+    ) -> LlmDetectionResult:
+        """Check whether a comment appears to be written by an LLM.
+
+        Args:
+            comment: The comment text to analyze
+
+        Returns:
+            LlmDetectionResult with likelihood score and detected signals
+
+        Raises:
+            RespectifyError: If the request fails
+        """
+        url: str = self._build_url("llmdetect")
+        headers: Dict[str, str] = self._build_headers()
+
+        data: Dict[str, str] = {"comment": comment}
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response: httpx.Response = await client.post(url, json=data, headers=headers)
+
+            if response.status_code != 200:
+                self._handle_error_response(response)
+
+            return self._parse_response(response, LlmDetectionResult)
+
+    @beartype
+    async def submit_perspective_feedback(
+        self,
+        comment: str,
+        attribute_name: str,
+        original_score: float,
+        suggested_score: float,
+        article_id: Optional[UUID] = None,
+        context_comments: Optional[List[str]] = None,
+    ) -> Dict:
+        """Submit a score correction for a Perspective attribute.
+
+        Args:
+            comment: The comment text that was scored
+            attribute_name: Which attribute to correct (e.g. 'toxicity')
+            original_score: The score the API returned
+            suggested_score: What you think the correct score should be
+            article_id: Optional article context ID (for reproducibility)
+            context_comments: Optional context comments (for reproducibility)
+
+        Returns:
+            Dict with status confirmation
+
+        Raises:
+            RespectifyError: If the request fails
+        """
+        url: str = self._build_url("perspective/feedback")
+        headers: Dict[str, str] = self._build_headers()
+
+        data: Dict[str, Union[str, float, List[str]]] = {
+            "comment": comment,
+            "attribute_name": attribute_name,
+            "original_score": original_score,
+            "suggested_score": suggested_score,
+        }
+        if article_id:
+            data["article_context_id"] = str(article_id)
+        if context_comments:
+            data["context_comments"] = context_comments
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response: httpx.Response = await client.post(url, json=data, headers=headers)
+
+            if response.status_code != 200:
+                self._handle_error_response(response)
+
+            return response.json()
+
     @beartype
     async def check_user_credentials(self) -> UserCheckResponse:
         """Verify user credentials and check subscription status.
