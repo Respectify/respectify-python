@@ -25,6 +25,12 @@ from respectify.schemas import (
     InitTopicResponse,
     UserCheckResponse,
     UserSubscriptionStatus,
+    PerspectiveSpanScore,
+    PerspectiveAttributeScore,
+    PerspectiveResult,
+    PerspectiveRawScores,
+    LlmDetectionSignal,
+    LlmDetectionResult,
 )
 from respectify.exceptions import (
     RespectifyError,
@@ -55,6 +61,12 @@ __all__ = [
     "InitTopicResponse",
     "UserCheckResponse",
     "UserSubscriptionStatus",
+    "PerspectiveSpanScore",
+    "PerspectiveAttributeScore",
+    "PerspectiveResult",
+    "PerspectiveRawScores",
+    "LlmDetectionSignal",
+    "LlmDetectionResult",
     # Exceptions
     "RespectifyError",
     "AuthenticationError",
