@@ -28,10 +28,11 @@ from respectify.schemas import (
     PerspectiveSpanScore,
     PerspectiveAttributeScore,
     PerspectiveResult,
-    PerspectiveRawScores,
     LlmDetectionSignal,
     LlmDetectionResult,
 )
+# PerspectiveRawScores intentionally NOT exported - it's an internal server schema
+# for LLM output before span resolution. Users should use PerspectiveResult.
 from respectify.exceptions import (
     RespectifyError,
     AuthenticationError,
@@ -64,7 +65,6 @@ __all__ = [
     "PerspectiveSpanScore",
     "PerspectiveAttributeScore",
     "PerspectiveResult",
-    "PerspectiveRawScores",
     "LlmDetectionSignal",
     "LlmDetectionResult",
     # Exceptions
