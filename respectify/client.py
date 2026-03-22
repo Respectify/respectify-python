@@ -353,7 +353,7 @@ class RespectifyClient(BaseRespectifyClient):
         Returns:
             PerspectiveResult with scores for all 16 attributes
         """
-        url: str = self._build_url("perspective")
+        url: str = self._build_url("perspective/analyse")
         headers: Dict[str, str] = self._build_headers()
 
         data: Dict[str, Union[str, List[str]]] = {"comment": comment}
@@ -418,7 +418,7 @@ class RespectifyClient(BaseRespectifyClient):
         Returns:
             Dict with status confirmation
         """
-        url: str = self._build_url("perspectivefeedback")
+        url: str = self._build_url("perspective/feedback")
         headers: Dict[str, str] = self._build_headers()
 
         data: Dict[str, Union[str, float, List[str]]] = {

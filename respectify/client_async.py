@@ -356,7 +356,7 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         Raises:
             RespectifyError: If the request fails
         """
-        url: str = self._build_url("perspective")
+        url: str = self._build_url("perspective/analyse")
         headers: Dict[str, str] = self._build_headers()
 
         data: Dict[str, Union[str, List[str]]] = {"comment": comment}
@@ -430,7 +430,7 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         Raises:
             RespectifyError: If the request fails
         """
-        url: str = self._build_url("perspectivefeedback")
+        url: str = self._build_url("perspective/feedback")
         headers: Dict[str, str] = self._build_headers()
 
         data: Dict[str, Union[str, float, List[str]]] = {
