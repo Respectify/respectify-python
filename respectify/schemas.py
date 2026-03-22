@@ -251,6 +251,15 @@ class LlmDetectionResult(BaseModel):
     reasoning: str = Field(..., description="Explanation of the analysis")
 
 
+class FeedbackResponse(BaseModel):
+    """Response from submitting feedback/score corrections."""
+
+    model_config = ConfigDict(frozen=True)
+
+    status: str = Field(..., description="'ok' if feedback was recorded successfully")
+    message: str = Field(..., description="Human-readable confirmation message")
+
+
 class MegaCallResult(BaseModel):
     """Represents the result of a mega call containing multiple analysis types."""
 
