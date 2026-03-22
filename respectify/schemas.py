@@ -172,6 +172,8 @@ class PerspectiveResult(BaseModel):
     compassion: PerspectiveAttributeScore = Field(..., description="Shows empathy, understanding, or concern for others")
     constructiveness: PerspectiveAttributeScore = Field(..., description="Contributes constructively, adds to the conversation")
     respect: PerspectiveAttributeScore = Field(..., description="Treats others and their views with dignity")
+    personal_story: PerspectiveAttributeScore = Field(..., description="Includes a personal experience as support for statements made")
+    affinity: PerspectiveAttributeScore = Field(..., description="References shared interests, motivations, or outlooks with others")
 
     # Summary
     summary: str = Field(..., description="One-sentence plain-language summary of the comment's character")
@@ -179,12 +181,14 @@ class PerspectiveResult(BaseModel):
 
 class PerspectiveRawScores(BaseModel):
     """Internal schema for LLM output before span resolution.
-    The LLM returns quoted_text for spans; Python code then resolves to character positions."""
+    The LLM returns quoted_text for spans; Python code then resolves to character positions.
+    Every attribute has a corresponding _span field for the most relevant quote (4-25 words)."""
 
-    # Toxicity attributes
+    # Toxicity attributes — each with a span quote
     toxicity: float = Field(..., ge=0.0, le=1.0)
     toxicity_span: str = Field(default="", description="Quoted text from the comment most relevant to toxicity")
     severe_toxicity: float = Field(..., ge=0.0, le=1.0)
+    severe_toxicity_span: str = Field(default="", description="Quoted text for severe toxicity")
     identity_attack: float = Field(..., ge=0.0, le=1.0)
     identity_attack_span: str = Field(default="", description="Quoted text for identity attack")
     insult: float = Field(..., ge=0.0, le=1.0)
@@ -194,19 +198,33 @@ class PerspectiveRawScores(BaseModel):
     threat: float = Field(..., ge=0.0, le=1.0)
     threat_span: str = Field(default="", description="Quoted text for threat")
 
-    # Content attributes
+    # Content attributes — each with a span quote
     sexually_explicit: float = Field(..., ge=0.0, le=1.0)
+    sexually_explicit_span: str = Field(default="", description="Quoted text for sexually explicit")
     incoherent: float = Field(..., ge=0.0, le=1.0)
+    incoherent_span: str = Field(default="", description="Quoted text for incoherent")
     inflammatory: float = Field(..., ge=0.0, le=1.0)
+    inflammatory_span: str = Field(default="", description="Quoted text for inflammatory")
     spam: float = Field(..., ge=0.0, le=1.0)
+    spam_span: str = Field(default="", description="Quoted text for spam")
 
-    # Bridging attributes
+    # Bridging attributes — each with a span quote
     reasoning: float = Field(..., ge=0.0, le=1.0)
+    reasoning_span: str = Field(default="", description="Quoted text for reasoning")
     curiosity: float = Field(..., ge=0.0, le=1.0)
+    curiosity_span: str = Field(default="", description="Quoted text for curiosity")
     nuance: float = Field(..., ge=0.0, le=1.0)
+    nuance_span: str = Field(default="", description="Quoted text for nuance")
     compassion: float = Field(..., ge=0.0, le=1.0)
+    compassion_span: str = Field(default="", description="Quoted text for compassion")
     constructiveness: float = Field(..., ge=0.0, le=1.0)
+    constructiveness_span: str = Field(default="", description="Quoted text for constructiveness")
     respect: float = Field(..., ge=0.0, le=1.0)
+    respect_span: str = Field(default="", description="Quoted text for respect")
+    personal_story: float = Field(..., ge=0.0, le=1.0)
+    personal_story_span: str = Field(default="", description="Quoted text for personal story")
+    affinity: float = Field(..., ge=0.0, le=1.0)
+    affinity_span: str = Field(default="", description="Quoted text for affinity")
 
     # Summary
     summary: str = Field(..., description="One-sentence summary")
