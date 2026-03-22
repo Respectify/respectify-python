@@ -151,29 +151,32 @@ class PerspectiveResult(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    # All attribute fields are Optional so unrequested attributes can be None.
+    # When all attributes are requested (the default), all will be populated.
+
     # Toxicity attributes (Perspective API core)
-    toxicity: PerspectiveAttributeScore = Field(..., description="Rude, disrespectful, or unreasonable content likely to make people leave a discussion")
-    severe_toxicity: PerspectiveAttributeScore = Field(..., description="Very hateful, aggressive, or disrespectful content; higher threshold than toxicity")
-    identity_attack: PerspectiveAttributeScore = Field(..., description="Negative or hateful content targeting someone because of their identity")
-    insult: PerspectiveAttributeScore = Field(..., description="Insulting, inflammatory, or negative comment towards a person or group")
-    profanity: PerspectiveAttributeScore = Field(..., description="Swear words, curse words, or other obscene language")
-    threat: PerspectiveAttributeScore = Field(..., description="Intention to inflict pain, injury, or violence")
+    toxicity: Optional[PerspectiveAttributeScore] = Field(None, description="Rude, disrespectful, or unreasonable content likely to make people leave a discussion")
+    severe_toxicity: Optional[PerspectiveAttributeScore] = Field(None, description="Very hateful, aggressive, or disrespectful content; higher threshold than toxicity")
+    identity_attack: Optional[PerspectiveAttributeScore] = Field(None, description="Negative or hateful content targeting someone because of their identity")
+    insult: Optional[PerspectiveAttributeScore] = Field(None, description="Insulting, inflammatory, or negative comment towards a person or group")
+    profanity: Optional[PerspectiveAttributeScore] = Field(None, description="Swear words, curse words, or other obscene language")
+    threat: Optional[PerspectiveAttributeScore] = Field(None, description="Intention to inflict pain, injury, or violence")
 
     # Content attributes (Perspective API experimental)
-    sexually_explicit: PerspectiveAttributeScore = Field(..., description="References to sexual acts or body parts in sexual context")
-    incoherent: PerspectiveAttributeScore = Field(..., description="Difficult to understand, nonsensical, or poorly written")
-    inflammatory: PerspectiveAttributeScore = Field(..., description="Intended to provoke or inflame rather than discuss")
-    spam: PerspectiveAttributeScore = Field(..., description="Irrelevant, promotional, or nonsensical content")
+    sexually_explicit: Optional[PerspectiveAttributeScore] = Field(None, description="References to sexual acts or body parts in sexual context")
+    incoherent: Optional[PerspectiveAttributeScore] = Field(None, description="Difficult to understand, nonsensical, or poorly written")
+    inflammatory: Optional[PerspectiveAttributeScore] = Field(None, description="Intended to provoke or inflame rather than discuss")
+    spam: Optional[PerspectiveAttributeScore] = Field(None, description="Irrelevant, promotional, or nonsensical content")
 
     # Bridging/constructive attributes (Perspective API bridging + Respectify additions)
-    reasoning: PerspectiveAttributeScore = Field(..., description="Demonstrates logical reasoning or evidence-based arguments")
-    curiosity: PerspectiveAttributeScore = Field(..., description="Shows genuine curiosity, asks thoughtful questions")
-    nuance: PerspectiveAttributeScore = Field(..., description="Demonstrates nuanced thinking, acknowledges complexity")
-    compassion: PerspectiveAttributeScore = Field(..., description="Shows empathy, understanding, or concern for others")
-    constructiveness: PerspectiveAttributeScore = Field(..., description="Contributes constructively, adds to the conversation")
-    respect: PerspectiveAttributeScore = Field(..., description="Treats others and their views with dignity")
-    personal_story: PerspectiveAttributeScore = Field(..., description="Includes a personal experience as support for statements made")
-    affinity: PerspectiveAttributeScore = Field(..., description="References shared interests, motivations, or outlooks with others")
+    reasoning: Optional[PerspectiveAttributeScore] = Field(None, description="Demonstrates logical reasoning or evidence-based arguments")
+    curiosity: Optional[PerspectiveAttributeScore] = Field(None, description="Shows genuine curiosity, asks thoughtful questions")
+    nuance: Optional[PerspectiveAttributeScore] = Field(None, description="Demonstrates nuanced thinking, acknowledges complexity")
+    compassion: Optional[PerspectiveAttributeScore] = Field(None, description="Shows empathy, understanding, or concern for others")
+    constructiveness: Optional[PerspectiveAttributeScore] = Field(None, description="Contributes constructively, adds to the conversation")
+    respect: Optional[PerspectiveAttributeScore] = Field(None, description="Treats others and their views with dignity")
+    personal_story: Optional[PerspectiveAttributeScore] = Field(None, description="Includes a personal experience as support for statements made")
+    affinity: Optional[PerspectiveAttributeScore] = Field(None, description="References shared interests, motivations, or outlooks with others")
 
     # Summary
     summary: str = Field(..., description="One-sentence plain-language summary of the comment's character")
