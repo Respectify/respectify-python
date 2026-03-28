@@ -5,7 +5,7 @@ asynchronous interfaces for comment moderation, spam detection, toxicity analysi
 and dogwhistle detection.
 """
 
-__version__ = "0.2.2"
+__version__ = "0.3.0"
 
 from respectify.client import RespectifyClient
 from respectify.client_async import RespectifyAsyncClient
