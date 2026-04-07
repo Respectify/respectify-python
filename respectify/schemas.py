@@ -177,6 +177,7 @@ class PerspectiveResult(BaseModel):
     respect: Optional[PerspectiveAttributeScore] = Field(None, description="Treats others and their views with dignity")
     personal_story: Optional[PerspectiveAttributeScore] = Field(None, description="Includes a personal experience as support for statements made")
     affinity: Optional[PerspectiveAttributeScore] = Field(None, description="References shared interests, motivations, or outlooks with others")
+    flirtation: Optional[PerspectiveAttributeScore] = Field(None, description="Non-explicit romantic or sexual interest signaling: pickup lines, appearance compliments, innuendo")
 
     # Summary
     summary: str = Field(..., description="One-sentence plain-language summary of the comment's character")
@@ -228,6 +229,8 @@ class PerspectiveRawScores(BaseModel):
     personal_story_span: str = Field(default="", description="Quoted text for personal story")
     affinity: float = Field(..., ge=0.0, le=1.0)
     affinity_span: str = Field(default="", description="Quoted text for affinity")
+    flirtation: float = Field(..., ge=0.0, le=1.0)
+    flirtation_span: str = Field(default="", description="Quoted text for flirtation")
 
     # Summary
     summary: str = Field(..., description="One-sentence summary")
