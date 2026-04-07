@@ -5,7 +5,7 @@ asynchronous interfaces for comment moderation, spam detection, toxicity analysi
 and dogwhistle detection.
 """
 
-__version__ = "0.2.2"
+__version__ = "0.3.2"
 
 from respectify.client import RespectifyClient
 from respectify.client_async import RespectifyAsyncClient
@@ -25,7 +25,15 @@ from respectify.schemas import (
     InitTopicResponse,
     UserCheckResponse,
     UserSubscriptionStatus,
+    PerspectiveSpanScore,
+    PerspectiveAttributeScore,
+    PerspectiveResult,
+    LlmDetectionSignal,
+    LlmDetectionResult,
+    FeedbackResponse,
 )
+# PerspectiveRawScores intentionally NOT exported - it's an internal server schema
+# for LLM output before span resolution. Users should use PerspectiveResult.
 from respectify.exceptions import (
     RespectifyError,
     AuthenticationError,
@@ -55,6 +63,12 @@ __all__ = [
     "InitTopicResponse",
     "UserCheckResponse",
     "UserSubscriptionStatus",
+    "PerspectiveSpanScore",
+    "PerspectiveAttributeScore",
+    "PerspectiveResult",
+    "LlmDetectionSignal",
+    "LlmDetectionResult",
+    "FeedbackResponse",
     # Exceptions
     "RespectifyError",
     "AuthenticationError",
