@@ -47,6 +47,18 @@ print(f"Quality: {score.overall_score}/5, Toxicity: {score.toxicity_score:.2f}")
 # Check if a comment is spam
 spam_result = client.check_spam("Great post!", article_id)
 print(f"Is spam: {spam_result.is_spam}")
+
+# Perspective-compatible scoring for migrations from Google's Perspective API
+perspective = client.perspective.analyze_comment(
+    {
+        "comment": {"text": "You clearly did not read the article."},
+        "requestedAttributes": {
+            "TOXICITY": {},
+            "INSULT": {},
+        },
+    }
+)
+print(perspective.attributeScores["TOXICITY"].summaryScore.value)
 ```
 
 ### Asynchronous Client
@@ -114,6 +126,10 @@ print(f"Dogwhistles: {result.dogwhistle.detection.dogwhistles_detected if result
 
 **Batch Operations:**
 - `megacall(comment, article_id, **options)` - Multiple analyses in one call
+
+**Perspective Compatibility:**
+- `client.perspective.analyze_comment(request)` - Public Perspective-compatible `analyzeComment`
+- `client.perspective.suggest_comment_score(request)` - Public Perspective-compatible `suggestCommentScore`
 
 **Authentication:**
 - `check_user_credentials()` - Verify API credentials work without calling any normal API
@@ -244,4 +260,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Megacall support for efficient batch operations
 - Full test suite with real API integration
 - Sphinx documentation with examples
-

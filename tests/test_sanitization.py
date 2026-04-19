@@ -312,26 +312,49 @@ class TestMegacallSanitization:
 
 
 class TestPerspectiveSanitization:
-    """Perspective spans should stay escaped but not double-escaped."""
+    """Perspective compatibility responses should stay escaped and thin."""
 
-    def test_preserves_escaped_span_text(self, client):
+    def test_preserves_compat_response_without_extra_escaping(self, client):
         mock_resp = make_mock_response(200, {
-            "summary": "Summary",
-            "toxicity": {
-                "score": 0.7,
-                "span_scores": [
-                    {
-                        "begin": 0,
-                        "end": 24,
-                        "score": 0.9,
-                        "quoted_text": "&lt;b&gt;bad&lt;/b&gt; &amp; rude",
-                    }
-                ],
+            "attributeScores": {
+                "TOXICITY": {
+                    "summaryScore": {
+                        "value": 0.7,
+                        "type": "PROBABILITY",
+                    },
+                    "spanScores": [
+                        {
+                            "begin": 0,
+                            "end": 24,
+                            "score": {
+                                "value": 0.9,
+                                "type": "PROBABILITY",
+                            },
+                        }
+                    ],
+                }
             },
+            "languages": ["en"],
         })
         with mock_httpx_post(mock_resp):
-            result = client.evaluate_perspective("test")
-        assert result.toxicity is not None
-        assert result.toxicity.span_scores[0].quoted_text == (
-            "&lt;b&gt;bad&lt;/b&gt; &amp; rude"
-        )
+            result = client.perspective.analyze_comment({"comment": {"text": "test"}})
+        assert result.attributeScores["TOXICITY"].summaryScore.value == 0.7
+        assert result.attributeScores["TOXICITY"].spanScores[0].score.type == "PROBABILITY"
+
+    def test_megacall_uses_explicit_perspective_flag_name(self, client):
+        mock_resp = make_mock_response(200, {
+            "comment_score": None,
+            "spam_check": None,
+            "relevance_check": None,
+            "dogwhistle_check": None,
+            "perspective": {"attributeScores": {}, "languages": ["en"]},
+            "llm_detection": None,
+        })
+        with mock_httpx_post(mock_resp) as mocked_client:
+            client.megacall(
+                "test",
+                ARTICLE_ID,
+                include_perspective_analyze_comment=True,
+            )
+        body = mocked_client.return_value.post.call_args.kwargs["json"]
+        assert body["run_perspective"] is True

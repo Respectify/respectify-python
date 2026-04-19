@@ -13,6 +13,7 @@ from respectify import (
     CommentScore,
     DogwhistleResult,
     MegaCallResult,
+    PerspectiveAnalyzeCommentResponse,
     SpamDetectionResult,
     CommentRelevanceResult,
     InitTopicResponse,
@@ -271,6 +272,39 @@ class TestRespectifyAsyncClient:
         assert isinstance(result.detection.confidence, float)
 
         print(f"\nAsync dogwhistle check with sensitive topics: detected={result.detection.dogwhistles_detected}")
+
+    @pytest.mark.asyncio
+    async def test_perspective_analyze_comment_success(self):
+        """Test public Perspective-compatible analyzeComment against the real API."""
+        result = await self.client.perspective.analyze_comment({
+            'comment': {'text': 'You clearly did not read the article.'},
+            'requestedAttributes': {
+                'TOXICITY': {},
+                'INSULT': {},
+            },
+        })
+
+        assert isinstance(result, PerspectiveAnalyzeCommentResponse)
+        assert 'TOXICITY' in result.attributeScores
+        assert isinstance(result.attributeScores['TOXICITY'].summaryScore.value, float)
+        assert 0.0 <= result.attributeScores['TOXICITY'].summaryScore.value <= 1.0
+        assert isinstance(result.languages, list)
+
+    @pytest.mark.asyncio
+    async def test_megacall_perspective_only_success(self):
+        """Test megacall Perspective branch against the real API."""
+        result = await self.client.megacall(
+            'This is an async test comment for Perspective compatibility',
+            include_perspective_analyze_comment=True
+        )
+
+        assert isinstance(result, MegaCallResult)
+        assert isinstance(result.perspective, PerspectiveAnalyzeCommentResponse)
+        assert 'TOXICITY' in result.perspective.attributeScores
+        assert result.spam_check is None
+        assert result.comment_score is None
+        assert result.relevance_check is None
+        assert result.dogwhistle_check is None
     
     @pytest.mark.asyncio
     async def test_megacall_spam_only_success(self):

@@ -42,12 +42,16 @@ class FieldInfo:
     @property
     def php_type(self) -> str:
         """Convert Python type to PHP type."""
+        is_optional = 'Optional[' in self.type_hint
+
+        if is_optional and ('List[' in self.type_hint or 'Dict[' in self.type_hint):
+            return '?array'
+
         # Handle List[X]
         if 'List[' in self.type_hint:
             return 'array'
-
-        # Check if it's optional
-        is_optional = 'Optional[' in self.type_hint
+        if 'Dict[' in self.type_hint:
+            return 'array'
 
         # Handle Optional[X]
         type_clean = self.type_hint.replace('Optional[', '').replace(']', '')
@@ -260,7 +264,37 @@ class PHPGenerator:
 
         for field in schema.fields:
             # Determine how to parse this field
-            if field.php_type == 'array':
+            if 'Optional[' in field.type_hint and 'List[' in field.type_hint:
+                inner_type = re.search(r'Optional\[List\[(\w+)\]\]', field.type_hint)
+                if inner_type:
+                    inner_class = inner_type.group(1)
+                    if inner_class in self.schema_map:
+                        lines.append(
+                            f"        $this->{field.php_name} = isset($data['{field.json_name}']) "
+                            f"? array_map(fn($item) => new {inner_class}($item), $data['{field.json_name}']) : null;"
+                        )
+                    else:
+                        lines.append(f"        $this->{field.php_name} = $data['{field.json_name}'] ?? null;")
+                else:
+                    lines.append(f"        $this->{field.php_name} = $data['{field.json_name}'] ?? null;")
+            elif 'Optional[' in field.type_hint and 'Dict[' in field.type_hint:
+                value_type = re.search(r'Optional\[Dict\[\s*\w+\s*,\s*(\w+)\s*\]\]', field.type_hint)
+                if value_type:
+                    inner_class = value_type.group(1)
+                    if inner_class in self.schema_map:
+                        lines.append(
+                            f"        $this->{field.php_name} = isset($data['{field.json_name}']) ? [] : null;"
+                        )
+                        lines.append(f"        if (isset($data['{field.json_name}'])) {{")
+                        lines.append(f"            foreach ($data['{field.json_name}'] as $key => $item) {{")
+                        lines.append(f"                $this->{field.php_name}[$key] = new {inner_class}($item);")
+                        lines.append("            }")
+                        lines.append("        }")
+                    else:
+                        lines.append(f"        $this->{field.php_name} = $data['{field.json_name}'] ?? null;")
+                else:
+                    lines.append(f"        $this->{field.php_name} = $data['{field.json_name}'] ?? null;")
+            elif field.php_type == 'array':
                 # Check if it's an array of objects
                 if 'List[' in field.type_hint:
                     # Extract the type inside List[]
@@ -273,6 +307,19 @@ class PHPGenerator:
                         else:
                             # Plain array
                             lines.append(f"        $this->{field.php_name} = $data['{field.json_name}'] ?? [];")
+                elif 'Dict[' in field.type_hint:
+                    value_type = re.search(r'Dict\[\s*\w+\s*,\s*(\w+)\s*\]', field.type_hint)
+                    if value_type:
+                        inner_class = value_type.group(1)
+                        if inner_class in self.schema_map:
+                            lines.append(f"        $this->{field.php_name} = [];")
+                            lines.append(f"        foreach (($data['{field.json_name}'] ?? []) as $key => $item) {{")
+                            lines.append(f"            $this->{field.php_name}[$key] = new {inner_class}($item);")
+                            lines.append("        }")
+                        else:
+                            lines.append(f"        $this->{field.php_name} = $data['{field.json_name}'] ?? [];")
+                    else:
+                        lines.append(f"        $this->{field.php_name} = $data['{field.json_name}'] ?? [];")
                 else:
                     lines.append(f"        $this->{field.php_name} = $data['{field.json_name}'] ?? [];")
             elif field.php_type in ('int', 'float', 'bool', 'string'):
@@ -324,7 +371,8 @@ class MarkdownGenerator:
     # Main schemas that have their own documentation pages
     MAIN_SCHEMAS = [
         'CommentScore', 'SpamDetectionResult', 'CommentRelevanceResult',
-        'DogwhistleResult', 'MegaCallResult', 'InitTopicResponse'
+        'DogwhistleResult', 'MegaCallResult', 'InitTopicResponse',
+        'PerspectiveAnalyzeCommentResponse', 'PerspectiveSuggestCommentScoreResponse'
     ]
 
     def __init__(self, schemas: List[SchemaInfo]):
@@ -539,6 +587,12 @@ Types are returned as JSON objects in API responses.
                 inner_json = type_map.get(inner, inner)
                 return f"array[{inner_json}]"
             return "array"
+        if 'Dict[' in type_hint:
+            value_type = self._get_dict_value_type(type_hint)
+            if value_type:
+                value_json = type_map.get(value_type, value_type)
+                return f"object[string -> {value_json}]"
+            return "object"
 
         # Handle Optional[X]
         if 'Optional[' in type_hint:
@@ -554,6 +608,11 @@ Types are returned as JSON objects in API responses.
         """Extract the inner type from List[X] or Optional[X]."""
         import re
         match = re.search(r'(?:List|Optional)\[(\w+)\]', type_hint)
+        return match.group(1) if match else None
+
+    def _get_dict_value_type(self, type_hint: str) -> Optional[str]:
+        """Extract the value type from Dict[str, X]."""
+        match = re.search(r'Dict\[\s*\w+\s*,\s*(\w+)\s*\]', type_hint)
         return match.group(1) if match else None
 
     def _format_python_type(self, field: FieldInfo) -> str:
@@ -572,10 +631,29 @@ Types are returned as JSON objects in API responses.
         type_hint = field.type_hint
 
         # Handle List[X] -> X[]
+        if 'Optional[' in type_hint and 'List[' in type_hint:
+            inner = re.search(r'Optional\[List\[(\w+)\]\]', type_hint)
+            if inner:
+                return f"?array<int, {inner.group(1)}>"
+            return "?array"
+        if 'Optional[' in type_hint and 'Dict[' in type_hint:
+            value_type = self._get_dict_value_type(type_hint)
+            if value_type:
+                type_map = {'str': 'string', 'int': 'int', 'float': 'float', 'bool': 'bool'}
+                php_type = type_map.get(value_type, value_type)
+                return f"?array<string, {php_type}>"
+            return "?array"
         if 'List[' in type_hint:
             inner = self._get_inner_type(type_hint)
             if inner:
                 return f"{inner}[]"
+            return "array"
+        if 'Dict[' in type_hint:
+            value_type = self._get_dict_value_type(type_hint)
+            if value_type:
+                type_map = {'str': 'string', 'int': 'int', 'float': 'float', 'bool': 'bool'}
+                php_type = type_map.get(value_type, value_type)
+                return f"array<string, {php_type}>"
             return "array"
 
         # Handle Optional[X] -> ?X
@@ -711,6 +789,15 @@ Types are returned as JSON objects in API responses.
             return json_code
 
         # Simple types
+        if 'Dict[' in type_hint:
+            value_type = self._get_dict_value_type(type_hint)
+            if value_type and value_type in self.schema_map:
+                inline_obj = self._build_json_object_example(self.schema_map[value_type])
+                return (
+                    f"```json\n\"{field.json_name}\": {{\n"
+                    f"  \"ATTRIBUTE_NAME\": {inline_obj}\n}}\n```"
+                )
+            return f'```json\n"{field.json_name}": {{}}\n```'
         if 'List[' in type_hint:
             if inner == 'str':
                 return f'```json\n"{field.json_name}": ["...", "..."]\n```'
@@ -745,6 +832,12 @@ Types are returned as JSON objects in API responses.
             elif inner in self.schema_map:
                 return f'[{inner}, ...]'
             return '[]'
+
+        if 'Dict[' in type_hint:
+            value_type = self._get_dict_value_type(type_hint)
+            if value_type in self.schema_map:
+                return '{ "KEY": ' + value_type + ' }'
+            return '{}'
 
         if 'Optional[' in type_hint:
             inner = self._get_inner_type(type_hint)
@@ -826,6 +919,11 @@ Types are returned as JSON objects in API responses.
                     return "array of strings"
                 return f"array of {inner}"
             return "array"
+        if 'Dict[' in type_hint:
+            value_type = self._get_dict_value_type(type_hint)
+            if value_type in self.schema_map:
+                return f"object mapping strings to {value_type} objects"
+            return "object"
 
         # Handle Optional[X]
         is_optional = 'Optional[' in type_hint
@@ -866,7 +964,8 @@ def main():
     # Filter to only the main result schemas we want to document
     doc_schemas = [
         'CommentScore', 'SpamDetectionResult', 'CommentRelevanceResult',
-        'DogwhistleResult', 'MegaCallResult', 'InitTopicResponse'
+        'DogwhistleResult', 'MegaCallResult', 'InitTopicResponse',
+        'PerspectiveAnalyzeCommentResponse', 'PerspectiveSuggestCommentScoreResponse'
     ]
 
     # Generate PHP classes

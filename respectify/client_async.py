@@ -7,6 +7,7 @@ import httpx
 from beartype import beartype
 
 from respectify._base import BaseRespectifyClient
+from respectify.perspective_async import RespectifyAsyncPerspectiveClient
 from respectify.schemas import (
     CommentRelevanceResult,
     CommentScore,
@@ -14,7 +15,6 @@ from respectify.schemas import (
     InitTopicResponse,
     LlmDetectionResult,
     MegaCallResult,
-    PerspectiveResult,
     SpamDetectionResult,
     UserCheckResponse,
 )
@@ -44,6 +44,7 @@ class RespectifyAsyncClient(BaseRespectifyClient):
             website: Optional website domain for license tracking
         """
         super().__init__(email, api_key, base_url, version, timeout, website)
+        self.perspective = RespectifyAsyncPerspectiveClient(self)
         
     @beartype
     async def init_topic_from_text(
@@ -269,7 +270,7 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         include_relevance: bool = False,
         include_comment_score: bool = False,
         include_dogwhistle: bool = False,
-        include_perspective: bool = False,
+        include_perspective_analyze_comment: bool = False,
         include_llm_detection: bool = False,
         banned_topics: Optional[List[str]] = None,
         sensitive_topics: Optional[List[str]] = None,
@@ -286,7 +287,7 @@ class RespectifyAsyncClient(BaseRespectifyClient):
             include_relevance: Include relevance analysis
             include_comment_score: Include comment quality scoring
             include_dogwhistle: Include dogwhistle detection
-            include_perspective: Include Perspective-compatible attribute scoring
+            include_perspective_analyze_comment: Include Perspective-compatible analyzeComment scoring
             include_llm_detection: Include LLM-likeness detection
             banned_topics: Optional list of banned topics for relevance check
             sensitive_topics: Optional list of sensitive topics for dogwhistle check
@@ -309,7 +310,7 @@ class RespectifyAsyncClient(BaseRespectifyClient):
             "run_relevance_check": include_relevance,
             "run_comment_score": include_comment_score,
             "run_dogwhistle_check": include_dogwhistle,
-            "run_perspective": include_perspective,
+            "run_perspective": include_perspective_analyze_comment,
             "run_llm_detect": include_llm_detection,
         }
 
@@ -333,48 +334,6 @@ class RespectifyAsyncClient(BaseRespectifyClient):
                 self._handle_error_response(response)
 
             return self._parse_response(response, MegaCallResult)
-    
-    @beartype
-    async def evaluate_perspective(
-        self,
-        comment: str,
-        article_id: Optional[UUID] = None,
-        context_comments: Optional[List[str]] = None,
-        requested_attributes: Optional[List[str]] = None,
-    ) -> PerspectiveResult:
-        """Score a comment on Perspective-compatible attributes (toxicity, bridging, etc).
-
-        Args:
-            comment: The comment text to score
-            article_id: Optional UUID of the article/topic for context
-            context_comments: Optional list of prior comments for conversation context
-            requested_attributes: Optional list of specific attributes to score
-
-        Returns:
-            PerspectiveResult with scores for all 16 attributes
-
-        Raises:
-            RespectifyError: If the request fails
-        """
-        url: str = self._build_url("perspective/analyse")
-        headers: Dict[str, str] = self._build_headers()
-
-        data: Dict[str, Union[str, List[str]]] = {"comment": comment}
-        if article_id:
-            data["article_context_id"] = str(article_id)
-        if context_comments:
-            data["context_comments"] = context_comments
-        if requested_attributes:
-            data["requested_attributes"] = requested_attributes
-
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response: httpx.Response = await client.post(url, json=data, headers=headers)
-
-            if response.status_code != 200:
-                self._handle_error_response(response)
-
-            return self._parse_response(response, PerspectiveResult)
-
     @beartype
     async def check_llm_likeness(
         self,
@@ -403,55 +362,6 @@ class RespectifyAsyncClient(BaseRespectifyClient):
                 self._handle_error_response(response)
 
             return self._parse_response(response, LlmDetectionResult)
-
-    @beartype
-    async def submit_perspective_feedback(
-        self,
-        comment: str,
-        attribute_name: str,
-        original_score: float,
-        suggested_score: float,
-        article_id: Optional[UUID] = None,
-        context_comments: Optional[List[str]] = None,
-    ) -> Dict:
-        """Submit a score correction for a Perspective attribute.
-
-        Args:
-            comment: The comment text that was scored
-            attribute_name: Which attribute to correct (e.g. 'toxicity')
-            original_score: The score the API returned
-            suggested_score: What you think the correct score should be
-            article_id: Optional article context ID (for reproducibility)
-            context_comments: Optional context comments (for reproducibility)
-
-        Returns:
-            Dict with status confirmation
-
-        Raises:
-            RespectifyError: If the request fails
-        """
-        url: str = self._build_url("perspective/feedback")
-        headers: Dict[str, str] = self._build_headers()
-
-        data: Dict[str, Union[str, float, List[str]]] = {
-            "comment": comment,
-            "attribute_name": attribute_name,
-            "original_score": original_score,
-            "suggested_score": suggested_score,
-        }
-        if article_id:
-            data["article_context_id"] = str(article_id)
-        if context_comments:
-            data["context_comments"] = context_comments
-
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response: httpx.Response = await client.post(url, json=data, headers=headers)
-
-            if response.status_code != 200:
-                self._handle_error_response(response)
-
-            return response.json()
-
     @beartype
     async def check_user_credentials(self) -> UserCheckResponse:
         """Verify user credentials and check subscription status.

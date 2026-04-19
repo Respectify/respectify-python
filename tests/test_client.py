@@ -12,6 +12,7 @@ from respectify import (
     CommentScore,
     DogwhistleResult,
     MegaCallResult,
+    PerspectiveAnalyzeCommentResponse,
     SpamDetectionResult,
     CommentRelevanceResult,
     InitTopicResponse,
@@ -254,6 +255,37 @@ class TestRespectifyClient:
         assert isinstance(result.detection.confidence, float)
 
         print(f"\nDogwhistle check with sensitive topics: detected={result.detection.dogwhistles_detected}")
+
+    def test_perspective_analyze_comment_success(self):
+        """Test public Perspective-compatible analyzeComment against the real API."""
+        result = self.client.perspective.analyze_comment({
+            'comment': {'text': 'You clearly did not read the article.'},
+            'requestedAttributes': {
+                'TOXICITY': {},
+                'INSULT': {},
+            },
+        })
+
+        assert isinstance(result, PerspectiveAnalyzeCommentResponse)
+        assert 'TOXICITY' in result.attributeScores
+        assert isinstance(result.attributeScores['TOXICITY'].summaryScore.value, float)
+        assert 0.0 <= result.attributeScores['TOXICITY'].summaryScore.value <= 1.0
+        assert isinstance(result.languages, list)
+
+    def test_megacall_perspective_only_success(self):
+        """Test megacall Perspective branch against the real API."""
+        result = self.client.megacall(
+            'This is a test comment for Perspective compatibility',
+            include_perspective_analyze_comment=True
+        )
+
+        assert isinstance(result, MegaCallResult)
+        assert isinstance(result.perspective, PerspectiveAnalyzeCommentResponse)
+        assert 'TOXICITY' in result.perspective.attributeScores
+        assert result.spam_check is None
+        assert result.comment_score is None
+        assert result.relevance_check is None
+        assert result.dogwhistle_check is None
     
     def test_megacall_spam_only_success(self):
         """Test successful megacall with spam detection only."""

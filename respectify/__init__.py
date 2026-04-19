@@ -5,10 +5,12 @@ asynchronous interfaces for comment moderation, spam detection, toxicity analysi
 and dogwhistle detection.
 """
 
-__version__ = "0.3.2"
+__version__ = "0.4.0"
 
 from respectify.client import RespectifyClient
 from respectify.client_async import RespectifyAsyncClient
+from respectify.perspective import RespectifyPerspectiveClient
+from respectify.perspective_async import RespectifyAsyncPerspectiveClient
 from respectify.schemas import (
     CommentScore,
     DogwhistleResult,
@@ -25,15 +27,14 @@ from respectify.schemas import (
     InitTopicResponse,
     UserCheckResponse,
     UserSubscriptionStatus,
-    PerspectiveSpanScore,
-    PerspectiveAttributeScore,
-    PerspectiveResult,
+    PerspectiveScore,
+    PerspectiveAnalyzeCommentSpanScore,
+    PerspectiveAnalyzeCommentAttributeScore,
+    PerspectiveAnalyzeCommentResponse,
+    PerspectiveSuggestCommentScoreResponse,
     LlmDetectionSignal,
     LlmDetectionResult,
-    FeedbackResponse,
 )
-# PerspectiveRawScores intentionally NOT exported - it's an internal server schema
-# for LLM output before span resolution. Users should use PerspectiveResult.
 from respectify.exceptions import (
     RespectifyError,
     AuthenticationError,
@@ -47,6 +48,8 @@ __all__ = [
     # Clients
     "RespectifyClient",
     "RespectifyAsyncClient",
+    "RespectifyPerspectiveClient",
+    "RespectifyAsyncPerspectiveClient",
     # Schemas
     "CommentScore",
     "DogwhistleResult",
@@ -63,12 +66,13 @@ __all__ = [
     "InitTopicResponse",
     "UserCheckResponse",
     "UserSubscriptionStatus",
-    "PerspectiveSpanScore",
-    "PerspectiveAttributeScore",
-    "PerspectiveResult",
+    "PerspectiveScore",
+    "PerspectiveAnalyzeCommentSpanScore",
+    "PerspectiveAnalyzeCommentAttributeScore",
+    "PerspectiveAnalyzeCommentResponse",
+    "PerspectiveSuggestCommentScoreResponse",
     "LlmDetectionSignal",
     "LlmDetectionResult",
-    "FeedbackResponse",
     # Exceptions
     "RespectifyError",
     "AuthenticationError",
