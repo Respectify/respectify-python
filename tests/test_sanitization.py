@@ -74,6 +74,11 @@ class TestSanitizeStringFunction:
         assert '"' not in result
         assert "'" not in result
 
+    def test_does_not_double_escape_existing_entities(self):
+        assert _sanitize_string("&lt;b&gt;bad&lt;/b&gt; &amp; rude") == (
+            "&lt;b&gt;bad&lt;/b&gt; &amp; rude"
+        )
+
 
 class TestSanitizeDataFunction:
     """Test the recursive _sanitize_data function."""
@@ -304,3 +309,29 @@ class TestMegacallSanitization:
         assert result.relevance_check is None
         assert result.comment_score is None
         assert result.dogwhistle_check is None
+
+
+class TestPerspectiveSanitization:
+    """Perspective spans should stay escaped but not double-escaped."""
+
+    def test_preserves_escaped_span_text(self, client):
+        mock_resp = make_mock_response(200, {
+            "summary": "Summary",
+            "toxicity": {
+                "score": 0.7,
+                "span_scores": [
+                    {
+                        "begin": 0,
+                        "end": 24,
+                        "score": 0.9,
+                        "quoted_text": "&lt;b&gt;bad&lt;/b&gt; &amp; rude",
+                    }
+                ],
+            },
+        })
+        with mock_httpx_post(mock_resp):
+            result = client.evaluate_perspective("test")
+        assert result.toxicity is not None
+        assert result.toxicity.span_scores[0].quoted_text == (
+            "&lt;b&gt;bad&lt;/b&gt; &amp; rude"
+        )

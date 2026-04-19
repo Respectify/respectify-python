@@ -1,6 +1,6 @@
 """Base client functionality shared between sync and async clients."""
 
-from html import escape as html_escape
+from html import escape as html_escape, unescape as html_unescape
 from typing import Any, Dict, Optional, Type, TypeVar, Union
 from urllib.parse import urljoin
 
@@ -29,7 +29,7 @@ def _sanitize_string(value: str) -> str:
 
     Uses stdlib html.escape with quote=True to encode &, <, >, ", and '.
     """
-    return html_escape(value, quote=True)
+    return html_escape(html_unescape(value), quote=True)
 
 
 def _sanitize_data(data: Any) -> Any:
