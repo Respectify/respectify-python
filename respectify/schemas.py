@@ -127,8 +127,22 @@ class PerspectiveScore(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    value: float = Field(..., ge=0.0, le=1.0, description="Probability score between 0.0 and 1.0")
-    type: str = Field(..., description="Score type. Respectify currently returns PROBABILITY.")
+    value: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Probability-style score between 0.0 and 1.0. Higher numbers mean "
+            "more of the requested attribute."
+        ),
+    )
+    type: str = Field(
+        ...,
+        description=(
+            "Score type. Respectify currently returns `PROBABILITY`, meaning the "
+            "value is a 0 to 1 probability-style score."
+        ),
+    )
 
 
 class PerspectiveAnalyzeCommentSpanScore(BaseModel):
@@ -146,10 +160,19 @@ class PerspectiveAnalyzeCommentAttributeScore(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    summaryScore: PerspectiveScore = Field(..., description="Overall score for the attribute")
+    summaryScore: PerspectiveScore = Field(
+        ...,
+        description=(
+            "Overall score for the attribute. This is the main score most "
+            "integrations use for thresholds and moderation decisions."
+        ),
+    )
     spanScores: Optional[List[PerspectiveAnalyzeCommentSpanScore]] = Field(
         None,
-        description="Optional span-level scores when span annotations were requested",
+        description=(
+            "Optional scores for specific spans of text that contributed to the "
+            "attribute. Returned only when span annotations were requested."
+        ),
     )
 
 
@@ -160,19 +183,33 @@ class PerspectiveAnalyzeCommentResponse(BaseModel):
 
     attributeScores: Dict[str, PerspectiveAnalyzeCommentAttributeScore] = Field(
         default_factory=dict,
-        description="Map of requested Perspective attribute names to Google-style score objects",
+        description=(
+            "Map of requested Perspective attribute names, such as `TOXICITY` or "
+            "`INSULT`, to their score objects. Each value contains a "
+            "`summaryScore` and, when requested, optional `spanScores`."
+        ),
     )
     languages: List[str] = Field(
         default_factory=list,
-        description="Requested or effective language context for this response",
+        description=(
+            "Requested or effective language context for this response, as language "
+            "codes such as `en`, `es`, or `fr`."
+        ),
     )
     detectedLanguages: Optional[List[str]] = Field(
         None,
-        description="Present only if Respectify actually detected languages",
+        description=(
+            "Present only if Respectify actually detected languages, as language "
+            "codes such as `en`, `es`, or `fr`."
+        ),
     )
     clientToken: Optional[str] = Field(
         None,
-        description="Opaque caller token echoed back when supplied",
+        description=(
+            "Caller-provided correlation token, echoed back unchanged when "
+            "supplied. Use this if you want to match the response to your own "
+            "request ID."
+        ),
     )
 
 
@@ -183,11 +220,18 @@ class PerspectiveSuggestCommentScoreResponse(BaseModel):
 
     requestedLanguages: Optional[List[str]] = Field(
         None,
-        description="Echoed requested languages when the caller supplied them",
+        description=(
+            "Echoed requested languages when the caller supplied them, as language "
+            "codes such as `en`, `es`, or `fr`."
+        ),
     )
     clientToken: Optional[str] = Field(
         None,
-        description="Opaque caller token echoed back when supplied",
+        description=(
+            "Caller-provided correlation token, echoed back unchanged when "
+            "supplied. Use this if you want to match the response to your own "
+            "request ID."
+        ),
     )
 
 

@@ -366,6 +366,11 @@ class MarkdownGenerator:
         'CommentScore': ['LogicalFallacy', 'ObjectionablePhrase', 'NegativeTonePhrase'],
         'CommentRelevanceResult': ['OnTopicResult', 'BannedTopicsResult'],
         'DogwhistleResult': ['DogwhistleDetection', 'DogwhistleDetails'],
+        'PerspectiveAnalyzeCommentResponse': [
+            'PerspectiveAnalyzeCommentAttributeScore',
+            'PerspectiveAnalyzeCommentSpanScore',
+            'PerspectiveScore',
+        ],
     }
 
     # Main schemas that have their own documentation pages
@@ -411,6 +416,10 @@ class MarkdownGenerator:
             if inner_type and inner_type in self.schema_map:
                 python_imports.add(inner_type)
                 php_imports.add(inner_type)
+            dict_value_type = self._get_dict_value_type(field.type_hint)
+            if dict_value_type and dict_value_type in self.schema_map:
+                python_imports.add(dict_value_type)
+                php_imports.add(dict_value_type)
 
         # Add import info at the top
         lines.insert(len(lines) - 2, self._generate_imports_section(schema.name, python_imports, php_imports))
@@ -701,6 +710,17 @@ Types are returned as JSON objects in API responses.
         type_hint = field.type_hint
         inner = self._get_inner_type(type_hint)
 
+        if 'Dict[' in type_hint:
+            value_type = self._get_dict_value_type(type_hint)
+            link_target = self._get_type_link(value_type, current_schema) if value_type else None
+            if link_target:
+                return (
+                    f"<code>result.{field.name}: Dict[str, </code>"
+                    f"[`{value_type}`]({link_target})"
+                    f"<code>]</code>"
+                )
+            return f"`result.{field.name}: {type_hint}`"
+
         # Add range for constrained numbers
         if 'ge' in field.constraints and 'le' in field.constraints:
             range_comment = f"  # {field.constraints['ge']}-{field.constraints['le']}"
@@ -729,6 +749,17 @@ Types are returned as JSON objects in API responses.
         """Format PHP field display with inline type link."""
         type_hint = field.type_hint
         inner = self._get_inner_type(type_hint)
+
+        if 'Dict[' in type_hint:
+            value_type = self._get_dict_value_type(type_hint)
+            link_target = self._get_type_link(value_type, current_schema) if value_type else None
+            if link_target:
+                return (
+                    f"<code>$result->{field.php_name}: array&lt;string, </code>"
+                    f"[`{value_type}`]({link_target})"
+                    f"<code>&gt;</code>"
+                )
+            return f"`$result->{field.php_name}: {self._format_php_type(field)}`"
 
         # Check if inner type needs a link (for List/Optional wrappers)
         link_target = self._get_type_link(inner, current_schema) if inner else None
@@ -793,9 +824,20 @@ Types are returned as JSON objects in API responses.
             value_type = self._get_dict_value_type(type_hint)
             if value_type and value_type in self.schema_map:
                 inline_obj = self._build_json_object_example(self.schema_map[value_type])
-                return (
+                link_target = self._get_type_link(value_type, current_schema)
+                json_code = (
                     f"```json\n\"{field.json_name}\": {{\n"
                     f"  \"ATTRIBUTE_NAME\": {inline_obj}\n}}\n```"
+                )
+                if link_target:
+                    return (
+                        f"{json_code}\n\n"
+                        f"Each key is a requested attribute name such as `TOXICITY`. "
+                        f"Each value is a [`{value_type}`]({link_target}) object."
+                    )
+                return (
+                    f"{json_code}\n\n"
+                    "Each key is a requested attribute name such as `TOXICITY`."
                 )
             return f'```json\n"{field.json_name}": {{}}\n```'
         if 'List[' in type_hint:
