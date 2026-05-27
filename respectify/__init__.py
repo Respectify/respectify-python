@@ -5,7 +5,7 @@ asynchronous interfaces for comment moderation, spam detection, toxicity analysi
 and dogwhistle detection.
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 from respectify.client import RespectifyClient
 from respectify.client_async import RespectifyAsyncClient
@@ -39,6 +39,7 @@ from respectify.exceptions import (
     RespectifyError,
     AuthenticationError,
     BadRequestError,
+    ArticleContextNotFoundError,
     PaymentRequiredError,
     UnsupportedMediaTypeError,
     ServerError,
@@ -77,6 +78,7 @@ __all__ = [
     "RespectifyError",
     "AuthenticationError",
     "BadRequestError",
+    "ArticleContextNotFoundError",
     "PaymentRequiredError",
     "UnsupportedMediaTypeError",
     "ServerError",

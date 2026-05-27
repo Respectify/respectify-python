@@ -14,6 +14,7 @@ from respectify.exceptions import (
     RespectifyError,
     AuthenticationError,
     BadRequestError,
+    ArticleContextNotFoundError,
     PaymentRequiredError,
     UnsupportedMediaTypeError,
     ServerError,
@@ -72,6 +73,21 @@ class TestServerApiErrorFormat:
             assert err.status_code == 400
             assert err.response_data["error"] == "Missing Parameter"
             assert err.response_data["message"] == "A comment to evaluate is required, but was missing or empty"
+
+    def test_400_article_context_not_found_maps_to_dedicated_error(self, client):
+        """A 400 carrying the stable not-found marker maps to ArticleContextNotFoundError,
+        which is also a BadRequestError so existing handlers keep working."""
+        mock_resp = make_mock_response(400, {
+            "error": "Article Context Not Found",
+            "message": "Article context not found - it may need to be regenerated",
+            "code": 400,
+        })
+        with mock_httpx_post(mock_resp):
+            with pytest.raises(ArticleContextNotFoundError) as exc_info:
+                client.evaluate_comment("test", UUID("00000000-0000-0000-0000-000000000000"))
+            err = exc_info.value
+            assert isinstance(err, BadRequestError)
+            assert err.status_code == 400
 
     def test_401_unauthorized(self, client):
         mock_resp = make_mock_response(401, {
