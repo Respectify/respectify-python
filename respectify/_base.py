@@ -9,8 +9,10 @@ from beartype import beartype
 from pydantic import BaseModel
 
 from respectify.exceptions import (
+    ArticleContextNotFoundError,
+    ARTICLE_CONTEXT_NOT_FOUND_MARKER,
     AuthenticationError,
-    BadRequestError, 
+    BadRequestError,
     PaymentRequiredError,
     RespectifyError,
     ServerError,
@@ -142,6 +144,15 @@ class BaseRespectifyClient:
         
         # Raise appropriate exception based on status code
         if status_code == 400:
+            # A well-formed-but-unresolvable article context returns a 400 with a stable
+            # message. Surface it as the dedicated (BadRequestError subclass) exception so
+            # callers can regenerate the article context and retry.
+            haystack = " ".join(
+                str(response_data.get(field, ""))
+                for field in ("message", "error", "description", "title")
+            ) if isinstance(response_data, dict) else error_message
+            if ARTICLE_CONTEXT_NOT_FOUND_MARKER.lower() in (haystack or error_message).lower():
+                raise ArticleContextNotFoundError(error_message, response_data)
             raise BadRequestError(error_message, response_data)
         elif status_code == 401:
             raise AuthenticationError(error_message, response_data)

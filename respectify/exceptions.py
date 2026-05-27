@@ -86,3 +86,30 @@ class ServerError(RespectifyError):
         response_data: Optional[Dict[str, Any]] = None
     ) -> None:
         super().__init__(message, status_code=500, response_data=response_data)
+
+
+# Stable substring present (case-insensitively) in the server's 400 error body when
+# an article context id is well-formed but cannot be resolved for the account/API key.
+# Cross-SDK contract shared with the backend constant ARTICLE_CONTEXT_NOT_FOUND_MESSAGE;
+# do not change without coordinating across the backend and the other SDKs.
+ARTICLE_CONTEXT_NOT_FOUND_MARKER: str = "Article context not found"
+
+
+class ArticleContextNotFoundError(BadRequestError):
+    """Raised when an article context id was well-formed but could not be resolved (HTTP 400).
+
+    Article contexts are scoped to the user AND the specific API key, so this usually
+    means the context was created under a different key (or never existed / expired).
+    Regenerate the article context (init_topic_from_text / init_topic_from_url) and retry.
+
+    Subclasses BadRequestError so existing code catching bad requests still works, while
+    new code can catch this specifically to trigger a regenerate-and-retry.
+    """
+
+    @beartype
+    def __init__(
+        self,
+        message: str = "Article context not found - it may need to be regenerated",
+        response_data: Optional[Dict[str, Any]] = None
+    ) -> None:
+        super().__init__(message, response_data=response_data)
