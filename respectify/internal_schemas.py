@@ -52,6 +52,11 @@ class PerspectiveResult(BaseModel):
     personal_story: Optional[PerspectiveAttributeScore] = Field(None)
     affinity: Optional[PerspectiveAttributeScore] = Field(None)
     flirtation: Optional[PerspectiveAttributeScore] = Field(None)
+    # From the Jigsaw bridging corpus, and the two attributes the fine-tuned
+    # scorer predicts best (F1 0.870 and 0.856). They have no Perspective
+    # equivalent, so they are reachable only through Respectify's own names.
+    alienation: Optional[PerspectiveAttributeScore] = Field(None)
+    moral_outrage: Optional[PerspectiveAttributeScore] = Field(None)
     summary: str = Field(..., description="One-sentence plain-language summary of the comment's character")
 
 
@@ -96,4 +101,8 @@ class PerspectiveRawScores(BaseModel):
     affinity_span: str = Field(default="", description="Quoted text for affinity")
     flirtation: float = Field(..., ge=0.0, le=1.0)
     flirtation_span: str = Field(default="", description="Quoted text for flirtation")
+    alienation: float = Field(..., ge=0.0, le=1.0)
+    alienation_span: str = Field(default="", description="Quoted text for alienation")
+    moral_outrage: float = Field(..., ge=0.0, le=1.0)
+    moral_outrage_span: str = Field(default="", description="Quoted text for moral outrage")
     summary: str = Field(..., description="One-sentence summary")
