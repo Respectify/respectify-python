@@ -5,14 +5,21 @@ asynchronous interfaces for comment moderation, spam detection, toxicity analysi
 and dogwhistle detection.
 """
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 from respectify.client import RespectifyClient
 from respectify.client_async import RespectifyAsyncClient
 from respectify.perspective import RespectifyPerspectiveClient
 from respectify.perspective_async import RespectifyAsyncPerspectiveClient
 from respectify.schemas import (
+    CommentAssessment,
     CommentScore,
+    FINDING_SEVERITY_MAX,
+    FINDING_SEVERITY_MIN,
+    FLOORED_MODERATION_CATEGORIES,
+    ModerationCategory,
+    ModerationTolerances,
+    ToleranceLevel,
     DogwhistleResult,
     LogicalFallacy,
     MegaCallResult,
@@ -52,7 +59,14 @@ __all__ = [
     "RespectifyPerspectiveClient",
     "RespectifyAsyncPerspectiveClient",
     # Schemas
+    "CommentAssessment",
     "CommentScore",
+    "FINDING_SEVERITY_MAX",
+    "FINDING_SEVERITY_MIN",
+    "FLOORED_MODERATION_CATEGORIES",
+    "ModerationCategory",
+    "ModerationTolerances",
+    "ToleranceLevel",
     "DogwhistleResult",
     "LogicalFallacy",
     "MegaCallResult", 

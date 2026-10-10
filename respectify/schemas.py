@@ -1,10 +1,82 @@
 """Pydantic schemas for Respectify API responses."""
 
-from typing import Dict, List, Optional
+from enum import Enum
+from typing import Dict, FrozenSet, List, Optional
 from uuid import UUID
 
 from beartype import beartype
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
+
+
+class ModerationCategory(str, Enum):
+    """The kinds of problem a comment can have, each with its own customer tolerance.
+
+    The first four are floored (see FLOORED_MODERATION_CATEGORIES): a customer may
+    make them stricter than standard, never more relaxed.
+    """
+
+    THREAT = "threat"                    # threats of violence or harm, urging self-harm
+    IDENTITY_ATTACK = "identity_attack"  # hostility toward an identity, slurs, dehumanising a group
+    SEXUAL_CONTENT = "sexual_content"    # explicit or crude sexual language
+    HARASSMENT = "harassment"            # sustained or targeted demeaning of a person, othering
+    INSULT = "insult"                    # a one-off insult or put-down of a person
+    PROFANITY = "profanity"              # swearing and crude language not aimed at an identity
+    DISMISSIVE_TONE = "dismissive_tone"  # sarcasm or dismissal toward someone in the discussion
+    LOGICAL_FALLACY = "logical_fallacy"
+    LOW_EFFORT = "low_effort"            # empty posts such as "me too" or "+1"
+
+
+FLOORED_MODERATION_CATEGORIES: FrozenSet[ModerationCategory] = frozenset({
+    ModerationCategory.THREAT,
+    ModerationCategory.IDENTITY_ATTACK,
+    ModerationCategory.SEXUAL_CONTENT,
+    ModerationCategory.HARASSMENT,
+})
+
+
+class ToleranceLevel(str, Enum):
+    """How much of one kind of problem a site accepts. STANDARD is the default and Respectify's normal behaviour."""
+
+    RELAXED = "relaxed"                # minor instances are not reported
+    STANDARD = "standard"
+    STRICT = "strict"                  # borderline comments always get a full assessment
+    ZERO_TOLERANCE = "zero_tolerance"  # any sign of it gets a full assessment
+
+
+class ModerationTolerances(BaseModel):
+    """A site's tolerance for each kind of problem. Omitted categories are STANDARD.
+
+    Floored categories (threats, identity attacks, sexual content, harassment)
+    reject RELAXED: tolerance there can only be raised, never lowered.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    threat: ToleranceLevel = Field(ToleranceLevel.STANDARD, description="Threats of violence or harm. Floored: standard or stricter.")
+    identity_attack: ToleranceLevel = Field(ToleranceLevel.STANDARD, description="Identity attacks and slurs. Floored: standard or stricter.")
+    sexual_content: ToleranceLevel = Field(ToleranceLevel.STANDARD, description="Explicit or crude sexual content. Floored: standard or stricter.")
+    harassment: ToleranceLevel = Field(ToleranceLevel.STANDARD, description="Targeted or sustained harassment. Floored: standard or stricter.")
+    insult: ToleranceLevel = Field(ToleranceLevel.STANDARD, description="One-off insults and put-downs")
+    profanity: ToleranceLevel = Field(ToleranceLevel.STANDARD, description="Swearing and crude language")
+    dismissive_tone: ToleranceLevel = Field(ToleranceLevel.STANDARD, description="Sarcasm or dismissal toward someone in the discussion")
+    logical_fallacy: ToleranceLevel = Field(ToleranceLevel.STANDARD, description="Logical fallacies")
+    low_effort: ToleranceLevel = Field(ToleranceLevel.STANDARD, description="Empty posts such as 'me too' or '+1'")
+
+    @model_validator(mode="after")
+    def _floored_categories_are_never_relaxed(self) -> "ModerationTolerances":
+        relaxed_floors = sorted(category.value for category in FLOORED_MODERATION_CATEGORIES
+                                if self.level_for(category) == ToleranceLevel.RELAXED)
+        if relaxed_floors:
+            raise ValueError(f"These categories can be made stricter but not relaxed: {', '.join(relaxed_floors)}")
+        return self
+
+    def level_for(self, category: ModerationCategory) -> ToleranceLevel:
+        return getattr(self, category.value)
+
+
+# Severity of one finding: 1 minor, 2 clear, 3 severe
+FINDING_SEVERITY_MIN = 1
+FINDING_SEVERITY_MAX = 3
 
 
 class LogicalFallacy(BaseModel):
@@ -16,6 +88,8 @@ class LogicalFallacy(BaseModel):
     quoted_logical_fallacy_example: str = Field(..., description="The part of the comment that contains the logical fallacy")
     explanation: str = Field(..., description="Explanation of the fallacy and suggestions for improvement")
     suggested_rewrite: str = Field(..., description="Suggested rewrite (only provided when comment appears good-faith; otherwise empty)")
+    severity: int = Field(..., ge=FINDING_SEVERITY_MIN, le=FINDING_SEVERITY_MAX,
+                          description="1 minor, 2 clear, 3 severe")
 
 
 class ObjectionablePhrase(BaseModel):
@@ -26,6 +100,9 @@ class ObjectionablePhrase(BaseModel):
     quoted_objectionable_phrase: str = Field(..., description="The objectionable phrase found in the comment")
     explanation: str = Field(..., description="Explanation of why this phrase is objectionable")
     suggested_rewrite: str = Field(..., description="Suggested rewrite (only provided when comment appears good-faith; otherwise empty)")
+    category: ModerationCategory = Field(..., description="What kind of problem the phrase is")
+    severity: int = Field(..., ge=FINDING_SEVERITY_MIN, le=FINDING_SEVERITY_MAX,
+                          description="1 minor, 2 clear, 3 severe")
 
 
 class NegativeTonePhrase(BaseModel):
@@ -36,11 +113,17 @@ class NegativeTonePhrase(BaseModel):
     quoted_negative_tone_phrase: str = Field(..., description="The phrase with negative tone")
     explanation: str = Field(..., description="Explanation of the negative tone")
     suggested_rewrite: str = Field(..., description="Suggested rewrite (only provided when comment appears good-faith; otherwise empty)")
+    category: ModerationCategory = Field(..., description="What kind of problem the phrase is")
+    severity: int = Field(..., ge=FINDING_SEVERITY_MIN, le=FINDING_SEVERITY_MAX,
+                          description="1 minor, 2 clear, 3 severe")
 
 
-class CommentScore(BaseModel):
-    """Represents the comprehensive evaluation of a comment's quality and toxicity."""
-    
+class CommentAssessment(BaseModel):
+    """The judgment of a comment's quality and toxicity: everything an evaluator assesses.
+
+    CommentScore adds what Respectify computes from it for a particular site.
+    """
+
     model_config = ConfigDict(frozen=True)
     
     logical_fallacies: List[LogicalFallacy] = Field(default_factory=list, description="List of logical fallacies found")
@@ -50,6 +133,17 @@ class CommentScore(BaseModel):
     overall_score: int = Field(..., ge=1, le=5, description="Overall quality score (1=poor, 5=excellent)")
     toxicity_score: float = Field(..., ge=0.0, le=1.0, description="Toxicity score (0.0=not toxic, 1.0=highly toxic)")
     toxicity_explanation: str = Field(..., description="Educational explanation of toxicity issues found")
+
+
+class CommentScore(CommentAssessment):
+    """Represents the comprehensive evaluation of a comment's quality and toxicity, under the site's tolerances.
+
+    Findings below the site's tolerance have already been removed.
+    """
+
+    exceeds_tolerance: bool = Field(..., description="True when the comment has a problem the site's tolerances do not accept. "
+                                                      "Use this, rather than toxicity_score alone, to decide whether to coach.")
+    tolerances: ModerationTolerances = Field(default_factory=ModerationTolerances, description="The tolerances this score was judged under")
 
 
 class SpamDetectionResult(BaseModel):

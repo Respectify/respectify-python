@@ -11,6 +11,7 @@ from respectify.perspective import RespectifyPerspectiveClient
 from respectify.schemas import (
     CommentRelevanceResult,
     CommentScore,
+    ModerationTolerances,
     DogwhistleResult,
     InitTopicResponse,
     LlmDetectionResult,
@@ -186,7 +187,8 @@ class RespectifyClient(BaseRespectifyClient):
         self,
         comment: str,
         article_id: UUID,
-        reply_to_comment: Optional[str] = None
+        reply_to_comment: Optional[str] = None,
+        tolerances: Optional[ModerationTolerances] = None
     ) -> CommentScore:
         """Evaluate a comment's quality and toxicity.
 
@@ -194,6 +196,7 @@ class RespectifyClient(BaseRespectifyClient):
             comment: The comment text to evaluate
             article_id: UUID of the article/topic
             reply_to_comment: Optional text of the comment being replied to, for context
+            tolerances: Optional tolerances for this call, overriding the ones saved for the API key
 
         Returns:
             CommentScore containing comprehensive evaluation
@@ -204,12 +207,14 @@ class RespectifyClient(BaseRespectifyClient):
         url: str = self._build_url("commentscore")
         headers: Dict[str, str] = self._build_headers()
 
-        data: Dict[str, str] = {
+        data: Dict[str, Union[str, Dict[str, str]]] = {
             "comment": comment,
             "article_context_id": str(article_id)
         }
         if reply_to_comment is not None:
             data["reply_to_comment"] = reply_to_comment
+        if tolerances is not None:
+            data["tolerances"] = tolerances.model_dump(mode="json")
 
         with httpx.Client(timeout=self.timeout) as client:
             response: httpx.Response = client.post(url, json=data, headers=headers)
@@ -276,7 +281,8 @@ class RespectifyClient(BaseRespectifyClient):
         sensitive_topics: Optional[List[str]] = None,
         dogwhistle_examples: Optional[List[str]] = None,
         reply_to_comment: Optional[str] = None,
-        context_comments: Optional[List[str]] = None
+        context_comments: Optional[List[str]] = None,
+        tolerances: Optional[ModerationTolerances] = None
     ) -> MegaCallResult:
         """Perform multiple analysis types in a single API call.
 
@@ -294,6 +300,7 @@ class RespectifyClient(BaseRespectifyClient):
             dogwhistle_examples: Optional list of dogwhistle examples
             reply_to_comment: Optional text of the comment being replied to, for comment score context
             context_comments: Optional prior comments for perspective context
+            tolerances: Optional tolerances for the comment score, overriding the ones saved for the API key
 
         Returns:
             MegaCallResult containing requested analysis results
@@ -304,7 +311,7 @@ class RespectifyClient(BaseRespectifyClient):
         url: str = self._build_url("megacall")
         headers: Dict[str, str] = self._build_headers()
 
-        data: Dict[str, Union[str, bool, List[str]]] = {
+        data: Dict[str, Union[str, bool, List[str], Dict[str, str]]] = {
             "comment": comment,
             "run_spam_check": include_spam,
             "run_relevance_check": include_relevance,
@@ -326,6 +333,8 @@ class RespectifyClient(BaseRespectifyClient):
             data["reply_to_comment"] = reply_to_comment
         if context_comments:
             data["context_comments"] = context_comments
+        if tolerances is not None:
+            data["tolerances"] = tolerances.model_dump(mode="json")
 
         with httpx.Client(timeout=self.timeout) as client:
             response: httpx.Response = client.post(url, json=data, headers=headers)
