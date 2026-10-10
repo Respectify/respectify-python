@@ -214,7 +214,7 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         if reply_to_comment is not None:
             data["reply_to_comment"] = reply_to_comment
         if tolerances is not None:
-            data["tolerances"] = tolerances.model_dump(mode="json")
+            data["tolerances"] = tolerances.model_dump(mode="json", exclude_unset=True)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response: httpx.Response = await client.post(url, json=data, headers=headers)
@@ -334,7 +334,7 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         if context_comments:
             data["context_comments"] = context_comments
         if tolerances is not None:
-            data["tolerances"] = tolerances.model_dump(mode="json")
+            data["tolerances"] = tolerances.model_dump(mode="json", exclude_unset=True)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response: httpx.Response = await client.post(url, json=data, headers=headers)

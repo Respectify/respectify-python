@@ -88,3 +88,57 @@ class TestFindingsAndScores:
             CommentScore(**_assessment_fields())
         score = CommentScore(**_assessment_fields(), exceeds_tolerance=False)
         assert score.tolerances == ModerationTolerances(), "Without tolerances given, the score was judged at standard"
+
+
+class TestClientsSendOnlyNamedCategories:
+    """A call's tolerances override the API key's saved ones only for the categories it names.
+
+    Sending every category would silently reset all the others to standard for that call.
+    """
+
+    _SCORE_JSON = {**_assessment_fields(), "exceeds_tolerance": False}
+
+    def _capture(self, monkeypatch, client_attribute: str):
+        import json
+        import httpx
+        import respectify.client as client_module
+        import respectify.client_async as async_client_module
+
+        sent: list = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            sent.append(json.loads(request.content))
+            return httpx.Response(200, json=self._SCORE_JSON)
+
+        real_client = getattr(httpx, client_attribute)
+        module = client_module if client_attribute == "Client" else async_client_module
+        monkeypatch.setattr(module.httpx, client_attribute,
+                            lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs))
+        return sent
+
+
+    def test_sync_client_sends_only_named_categories(self, monkeypatch):
+        from uuid import uuid4
+        from respectify import RespectifyClient
+        sent = self._capture(monkeypatch, "Client")
+        RespectifyClient("user@example.com", "key").evaluate_comment(
+            "A comment", uuid4(), tolerances=ModerationTolerances(insult=ToleranceLevel.RELAXED))
+        assert sent[0]["tolerances"] == {"insult": "relaxed"}, "Only the category the caller named is sent"
+
+
+    def test_explicit_standard_is_sent(self, monkeypatch):
+        from uuid import uuid4
+        from respectify import RespectifyClient
+        sent = self._capture(monkeypatch, "Client")
+        RespectifyClient("user@example.com", "key").evaluate_comment(
+            "A comment", uuid4(), tolerances=ModerationTolerances(insult=ToleranceLevel.STANDARD))
+        assert sent[0]["tolerances"] == {"insult": "standard"}, "Naming standard is an override, not an omission"
+
+
+    def test_async_megacall_sends_only_named_categories(self, monkeypatch):
+        import asyncio
+        from respectify import RespectifyAsyncClient
+        sent = self._capture(monkeypatch, "AsyncClient")
+        asyncio.run(RespectifyAsyncClient("user@example.com", "key").megacall(
+            "A comment", include_spam=True, tolerances=ModerationTolerances(low_effort=ToleranceLevel.STRICT)))
+        assert sent[0]["tolerances"] == {"low_effort": "strict"}, "Only the category the caller named is sent"
