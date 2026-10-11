@@ -313,8 +313,8 @@ PHP_FIELD_DOC_OVERRIDES: dict[tuple[str, str], str] = {
         "False if the server did not supply it."
     ),
     ('CommentScore', 'tolerances'): (
-        "The tolerances this score was judged under: the API key's saved tolerances with any per-call\n"
-        "overrides applied. Categories the server did not report read as `standard`."
+        "The comment-health levels this score was judged under, as sent with the request.\n"
+        "Items the server did not report read as `standard`."
     ),
 }
 # Likewise for class docstrings, keyed by schema name

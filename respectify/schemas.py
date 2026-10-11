@@ -35,19 +35,33 @@ FLOORED_MODERATION_CATEGORIES: FrozenSet[ModerationCategory] = frozenset({
 
 
 class ToleranceLevel(str, Enum):
-    """How much of one kind of problem a site accepts. STANDARD is the default and Respectify's normal behaviour."""
+    """How much of one kind of problem a site accepts, for one comment-health item. STANDARD is the default.
 
-    RELAXED = "relaxed"                # minor instances are not reported
+    For a problem category, by the worst finding of that kind:
+      OFF            -- not assessed: the item is left out of comment health
+      RELAXED        -- accepts minor and clear findings; only severe ones fail
+      STANDARD       -- accepts minor findings; clear and severe ones fail
+      STRICT         -- accepts no findings
+      ZERO_TOLERANCE -- accepts no findings, and any hint of one gets a full assessment
+    For quality, the lowest quality score accepted: RELAXED 2, STANDARD 3, STRICT 4, ZERO_TOLERANCE 5.
+    """
+
+    OFF = "off"
+    RELAXED = "relaxed"
     STANDARD = "standard"
-    STRICT = "strict"                  # borderline comments always get a full assessment
-    ZERO_TOLERANCE = "zero_tolerance"  # any sign of it gets a full assessment
+    STRICT = "strict"
+    ZERO_TOLERANCE = "zero_tolerance"
+
+
+# The comment-health item that is not a problem category: the comment's quality, 1-5
+QUALITY_HEALTH_ITEM = "quality"
 
 
 class ModerationTolerances(BaseModel):
-    """A site's tolerance for each kind of problem. Omitted categories are STANDARD.
+    """A site's level for each comment-health item: the nine problem categories, and quality. Omitted items are STANDARD.
 
     Floored categories (threats, identity attacks, sexual content, harassment)
-    reject RELAXED: tolerance there can only be raised, never lowered.
+    reject RELAXED and OFF: they can be made stricter, never relaxed or turned off.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -61,13 +75,14 @@ class ModerationTolerances(BaseModel):
     dismissive_tone: ToleranceLevel = Field(ToleranceLevel.STANDARD, description="Sarcasm or dismissal toward someone in the discussion")
     logical_fallacy: ToleranceLevel = Field(ToleranceLevel.STANDARD, description="Logical fallacies")
     low_effort: ToleranceLevel = Field(ToleranceLevel.STANDARD, description="Empty posts such as 'me too' or '+1'")
+    quality: ToleranceLevel = Field(ToleranceLevel.STANDARD, description="The comment's overall quality, 1-5: the lowest score accepted")
 
     @model_validator(mode="after")
     def _floored_categories_are_never_relaxed(self) -> "ModerationTolerances":
         relaxed_floors = sorted(category.value for category in FLOORED_MODERATION_CATEGORIES
-                                if self.level_for(category) == ToleranceLevel.RELAXED)
+                                if self.level_for(category) in (ToleranceLevel.RELAXED, ToleranceLevel.OFF))
         if relaxed_floors:
-            raise ValueError(f"These categories can be made stricter but not relaxed: {', '.join(relaxed_floors)}")
+            raise ValueError(f"These categories can be made stricter but not relaxed or turned off: {', '.join(relaxed_floors)}")
         return self
 
     def level_for(self, category: ModerationCategory) -> ToleranceLevel:
@@ -118,6 +133,16 @@ class NegativeTonePhrase(BaseModel):
                           description="1 minor, 2 clear, 3 severe")
 
 
+class HealthItemScore(BaseModel):
+    """One comment-health item: how the comment scored on it, and the lowest score the site accepts."""
+
+    model_config = ConfigDict(frozen=True)
+
+    score: int = Field(..., ge=1, le=5, description="5 means nothing found. For a category: minor finding 4, clear 2, severe 1. For quality: the quality score.")
+    minimum: int = Field(..., ge=1, le=5, description="The lowest score this item's level accepts")
+    is_acceptable: bool = Field(..., description="Whether score is at or above minimum")
+
+
 class CommentAssessment(BaseModel):
     """The judgment of a comment's quality and toxicity: everything an evaluator assesses.
 
@@ -141,9 +166,16 @@ class CommentScore(CommentAssessment):
     Findings below the site's tolerance have already been removed.
     """
 
-    exceeds_tolerance: bool = Field(..., description="True when the comment has a problem the site's tolerances do not accept. "
-                                                      "Use this, rather than toxicity_score alone, to decide whether to coach.")
+    overall_score: int = Field(..., ge=1, le=5, description="Comment health, 1-5: health_score rounded. "
+                                                            "The quality score alone is health_items['quality'].")
+    exceeds_tolerance: bool = Field(..., description="True when any comment-health item scores below what the site accepts, "
+                                                      "or the comment is severely toxic. Use this to decide whether to coach.")
     tolerances: ModerationTolerances = Field(default_factory=ModerationTolerances, description="The tolerances this score was judged under")
+    health_score: Optional[float] = Field(None, ge=1.0, le=5.0, description="Comment health: the geometric mean of the quality score and "
+                                                                             "the worst problem item's score, leaving out whichever is turned off. "
+                                                                             "None when every item is off.")
+    health_items: Dict[str, HealthItemScore] = Field(default_factory=dict, description="Each comment-health item not turned off, "
+                                                                                        "by name: the nine categories and 'quality'")
 
 
 class SpamDetectionResult(BaseModel):

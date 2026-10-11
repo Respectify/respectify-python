@@ -42,7 +42,16 @@ article_id = topic.article_id
 
 # Evaluate comment quality and toxicity
 score = client.evaluate_comment("This is a thoughtful comment", article_id)
-print(f"Quality: {score.overall_score}/5, Toxicity: {score.toxicity_score:.2f}")
+print(f"Health: {score.overall_score}/5, Toxicity: {score.toxicity_score:.2f}")
+
+# Comment health: one level per item -- off, relaxed, standard (default), strict, zero_tolerance.
+# Threats, identity attacks, sexual content and harassment can only be made stricter.
+from respectify import ModerationTolerances, ToleranceLevel
+score = client.evaluate_comment("That's a silly take, mate", article_id,
+                                tolerances=ModerationTolerances(insult=ToleranceLevel.RELAXED, quality=ToleranceLevel.OFF))
+if score.exceeds_tolerance:  # the verdict to act on
+    for name, item in score.health_items.items():
+        print(f"{name}: {item.score}/5 (accepts {item.minimum}+)")
 
 # Check if a comment is spam
 spam_result = client.check_spam("Great post!", article_id)
@@ -83,7 +92,7 @@ async def main():
     
     spam_result, score_result = await asyncio.gather(spam_task, score_task)
     
-    print(f"Spam: {spam_result.is_spam}, Quality: {score_result.overall_score}/5")
+    print(f"Spam: {spam_result.is_spam}, Health: {score_result.overall_score}/5")
 
 asyncio.run(main())
 ```
@@ -105,7 +114,7 @@ result = client.megacall(
 
 # Access individual results
 print(f"Spam: {result.spam.is_spam if result.spam else 'N/A'}")
-print(f"Quality: {result.comment_score.overall_score if result.comment_score else 'N/A'}/5")
+print(f"Health: {result.comment_score.overall_score if result.comment_score else 'N/A'}/5")
 print(f"On topic: {result.relevance.on_topic.is_on_topic if result.relevance else 'N/A'}")
 print(f"Dogwhistles: {result.dogwhistle.detection.dogwhistles_detected if result.dogwhistle else 'N/A'}")
 ```

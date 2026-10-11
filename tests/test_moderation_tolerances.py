@@ -7,6 +7,7 @@ from respectify import (
     FLOORED_MODERATION_CATEGORIES,
     CommentAssessment,
     CommentScore,
+    HealthItemScore,
     ModerationCategory,
     ModerationTolerances,
     ToleranceLevel,
@@ -32,6 +33,19 @@ class TestModerationTolerances:
         tolerances = ModerationTolerances()
         for category in ModerationCategory:
             assert tolerances.level_for(category) == ToleranceLevel.STANDARD, f"{category.value} should default to standard"
+        assert tolerances.quality == ToleranceLevel.STANDARD, "Quality is a health item too, standard by default"
+
+
+    def test_tunable_items_may_be_turned_off(self):
+        tolerances = ModerationTolerances(logical_fallacy=ToleranceLevel.OFF, quality=ToleranceLevel.OFF)
+        assert tolerances.level_for(ModerationCategory.LOGICAL_FALLACY) == ToleranceLevel.OFF
+        assert tolerances.quality == ToleranceLevel.OFF
+
+
+    @pytest.mark.parametrize("category", sorted(FLOORED_MODERATION_CATEGORIES, key=lambda c: c.value))
+    def test_floored_categories_cannot_be_turned_off(self, category):
+        with pytest.raises(ValidationError, match="stricter but not relaxed or turned off"):
+            ModerationTolerances(**{category.value: ToleranceLevel.OFF})
 
 
     def test_tunable_categories_may_be_relaxed(self):
@@ -88,13 +102,24 @@ class TestFindingsAndScores:
             CommentScore(**_assessment_fields())
         score = CommentScore(**_assessment_fields(), exceeds_tolerance=False)
         assert score.tolerances == ModerationTolerances(), "Without tolerances given, the score was judged at standard"
+        assert score.health_items == {} and score.health_score is None, "Health fields are optional for older servers"
+
+
+    def test_health_items_round_trip(self):
+        score = CommentScore(**_assessment_fields(), exceeds_tolerance=True, health_score=2.9,
+                             health_items={"insult": HealthItemScore(score=2, minimum=4, is_acceptable=False),
+                                           "quality": HealthItemScore(score=3, minimum=3, is_acceptable=True)})
+        assert CommentScore.model_validate_json(score.model_dump_json()) == score
+
+
+    def test_health_item_scores_are_on_the_one_to_five_scale(self):
+        for bad in (0, 6):
+            with pytest.raises(ValidationError):
+                HealthItemScore(score=bad, minimum=3, is_acceptable=False)
 
 
 class TestClientsSendOnlyNamedCategories:
-    """A call's tolerances override the API key's saved ones only for the categories it names.
-
-    Sending every category would silently reset all the others to standard for that call.
-    """
+    """A call sends only the levels its caller named; the server treats the rest as standard."""
 
     _SCORE_JSON = {**_assessment_fields(), "exceeds_tolerance": False}
 

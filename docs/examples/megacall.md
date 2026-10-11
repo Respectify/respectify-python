@@ -36,7 +36,7 @@ if result.relevance:
     print(f"Banned topics: {result.relevance.banned_topics.banned_topics}")
 
 if result.comment_score:
-    print(f"Quality score: {result.comment_score.overall_score}/5")
+    print(f"Health: {result.comment_score.overall_score}/5")
     print(f"Toxicity score: {result.comment_score.toxicity_score:.2f}")
 
 if result.dogwhistle:
@@ -129,7 +129,7 @@ async def async_megacall_example():
     
     print(f"Analysis complete:")
     print(f"  Spam: {result.spam.is_spam if result.spam else 'Not analyzed'}")
-    print(f"  Quality: {result.comment_score.overall_score if result.comment_score else 'Not analyzed'}/5")
+    print(f"  Health: {result.comment_score.overall_score if result.comment_score else 'Not analyzed'}/5")
     print(f"  Relevant: {result.relevance.on_topic.is_on_topic if result.relevance else 'Not analyzed'}")
 
 asyncio.run(async_megacall_example())
@@ -162,7 +162,7 @@ def batch_moderate_comments(client, comments, article_id):
                 'comment': comment[:100] + ('...' if len(comment) > 100 else ''),
                 'spam': result.spam.is_spam if result.spam else None,
                 'spam_confidence': result.spam.confidence if result.spam else None,
-                'quality_score': result.comment_score.overall_score if result.comment_score else None,
+                'health_score': result.comment_score.overall_score if result.comment_score else None,
                 'toxicity_score': result.comment_score.toxicity_score if result.comment_score else None,
                 'on_topic': result.relevance.on_topic.is_on_topic if result.relevance else None,
                 'banned_topics': result.relevance.banned_topics.banned_topics if result.relevance else [],
@@ -202,7 +202,7 @@ for result in results:
         status_icons = []
         if result['spam']:
             status_icons.append("🚫 SPAM")
-        if result['quality_score'] and result['quality_score'] <= 2:
+        if result['health_score'] and result['health_score'] <= 2:
             status_icons.append("📉 LOW QUALITY")
         if result['toxicity_score'] and result['toxicity_score'] > 0.7:
             status_icons.append("☠️ TOXIC")

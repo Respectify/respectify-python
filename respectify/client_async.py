@@ -196,7 +196,7 @@ class RespectifyAsyncClient(BaseRespectifyClient):
             comment: The comment text to evaluate
             article_id: UUID of the article/topic
             reply_to_comment: Optional text of the comment being replied to, for context
-            tolerances: Optional tolerances for this call, overriding the ones saved for the API key
+            tolerances: Optional comment-health levels for this call; items not named are standard
 
         Returns:
             CommentScore containing comprehensive evaluation
@@ -300,7 +300,7 @@ class RespectifyAsyncClient(BaseRespectifyClient):
             dogwhistle_examples: Optional list of dogwhistle examples
             reply_to_comment: Optional text of the comment being replied to, for comment score context
             context_comments: Optional prior comments for perspective context
-            tolerances: Optional tolerances for the comment score, overriding the ones saved for the API key
+            tolerances: Optional comment-health levels for the comment score; items not named are standard
 
         Returns:
             MegaCallResult containing requested analysis results
