@@ -14,7 +14,6 @@ from respectify.schemas import (
     ModerationTolerances,
     DogwhistleResult,
     InitTopicResponse,
-    LlmDetectionResult,
     MegaCallResult,
     SpamDetectionResult,
     UserCheckResponse,
@@ -276,7 +275,6 @@ class RespectifyClient(BaseRespectifyClient):
         include_comment_score: bool = False,
         include_dogwhistle: bool = False,
         include_perspective_analyze_comment: bool = False,
-        include_llm_detection: bool = False,
         banned_topics: Optional[List[str]] = None,
         sensitive_topics: Optional[List[str]] = None,
         dogwhistle_examples: Optional[List[str]] = None,
@@ -294,7 +292,6 @@ class RespectifyClient(BaseRespectifyClient):
             include_comment_score: Include comment quality scoring
             include_dogwhistle: Include dogwhistle detection
             include_perspective_analyze_comment: Include Perspective-compatible analyzeComment scoring
-            include_llm_detection: Include LLM-likeness detection
             banned_topics: Optional list of banned topics for relevance check
             sensitive_topics: Optional list of sensitive topics for dogwhistle check
             dogwhistle_examples: Optional list of dogwhistle examples
@@ -318,7 +315,6 @@ class RespectifyClient(BaseRespectifyClient):
             "run_comment_score": include_comment_score,
             "run_dogwhistle_check": include_dogwhistle,
             "run_perspective": include_perspective_analyze_comment,
-            "run_llm_detect": include_llm_detection,
         }
 
         if article_id:
@@ -343,28 +339,6 @@ class RespectifyClient(BaseRespectifyClient):
                 self._handle_error_response(response)
 
             return self._parse_response(response, MegaCallResult)
-    @beartype
-    def check_llm_likeness(self, comment: str) -> LlmDetectionResult:
-        """Check whether a comment appears to be written by an LLM.
-
-        Args:
-            comment: The comment text to analyze
-
-        Returns:
-            LlmDetectionResult with likelihood score and detected signals
-        """
-        url: str = self._build_url("llmdetect")
-        headers: Dict[str, str] = self._build_headers()
-
-        data: Dict[str, str] = {"comment": comment}
-
-        with httpx.Client(timeout=self.timeout) as client:
-            response: httpx.Response = client.post(url, json=data, headers=headers)
-
-            if response.status_code != 200:
-                self._handle_error_response(response)
-
-            return self._parse_response(response, LlmDetectionResult)
     @beartype
     def check_user_credentials(self) -> UserCheckResponse:
         """Verify user credentials and check subscription status.

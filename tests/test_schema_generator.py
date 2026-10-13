@@ -93,7 +93,7 @@ class TestSchemaGeneratorPhp:
         for file_name in ('LogicalFallacy.php', 'ObjectionablePhrase.php', 'NegativeTonePhrase.php'):
             php_code = generated_php.get(file_name, '')
             assert 'FINDING_SEVERITY' not in php_code, f"{file_name} leaks a Python constant name into its docs"
-            assert 'Constraints: ge=1, le=3' in php_code
+            assert 'Constraints: ge=1, le=4' in php_code
 
     @pytest.mark.skipif(not COMMITTED_PHP_SCHEMAS_DIR.is_dir(), reason="respectify-php is not checked out alongside")
     def test_generated_files_match_respectify_php(self, generated_php):

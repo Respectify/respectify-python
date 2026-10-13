@@ -41,8 +41,6 @@ from respectify.schemas import (
     PerspectiveAnalyzeCommentAttributeScore,
     PerspectiveAnalyzeCommentResponse,
     PerspectiveSuggestCommentScoreResponse,
-    LlmDetectionSignal,
-    LlmDetectionResult,
 )
 from respectify.exceptions import (
     RespectifyError,
@@ -90,8 +88,6 @@ __all__ = [
     "PerspectiveAnalyzeCommentAttributeScore",
     "PerspectiveAnalyzeCommentResponse",
     "PerspectiveSuggestCommentScoreResponse",
-    "LlmDetectionSignal",
-    "LlmDetectionResult",
     # Exceptions
     "RespectifyError",
     "AuthenticationError",

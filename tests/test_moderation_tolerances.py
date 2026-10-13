@@ -12,7 +12,7 @@ from respectify import (
     ModerationTolerances,
     ToleranceLevel,
 )
-from respectify.schemas import NegativeTonePhrase
+from respectify.schemas import FINDING_SEVERITY_MAX, NegativeTonePhrase
 
 
 def _assessment_fields() -> dict:
@@ -60,6 +60,23 @@ class TestModerationTolerances:
             ModerationTolerances(**{category.value: ToleranceLevel.RELAXED})
 
 
+    @pytest.mark.parametrize("category", sorted(FLOORED_MODERATION_CATEGORIES, key=lambda c: c.value))
+    def test_floored_categories_reject_permissive(self, category):
+        with pytest.raises(ValidationError, match="stricter but not relaxed"):
+            ModerationTolerances(**{category.value: ToleranceLevel.PERMISSIVE})
+
+
+    def test_tunable_categories_and_quality_may_be_permissive(self):
+        tolerances = ModerationTolerances(insult=ToleranceLevel.PERMISSIVE, quality=ToleranceLevel.PERMISSIVE)
+        assert tolerances.level_for(ModerationCategory.INSULT) == ToleranceLevel.PERMISSIVE
+        assert tolerances.quality == ToleranceLevel.PERMISSIVE
+        assert ModerationTolerances.model_validate({"profanity": "permissive"}).profanity == ToleranceLevel.PERMISSIVE
+
+
+    def test_levels_run_from_loosest_to_strictest(self):
+        assert [level.value for level in ToleranceLevel] == ["off", "permissive", "relaxed", "standard", "strict", "zero_tolerance"]
+
+
     @pytest.mark.parametrize("level", [ToleranceLevel.STANDARD, ToleranceLevel.STRICT, ToleranceLevel.ZERO_TOLERANCE])
     def test_floored_categories_accept_standard_or_stricter(self, level):
         tolerances = ModerationTolerances(threat=level, sexual_content=level)
@@ -85,8 +102,15 @@ class TestModerationTolerances:
 
 class TestFindingsAndScores:
 
+    def test_extreme_is_severity_4(self):
+        phrase = NegativeTonePhrase(quoted_negative_tone_phrase="x", explanation="", suggested_rewrite="",
+                                    category=ModerationCategory.INSULT, severity=4)
+        assert phrase.severity == 4
+        assert FINDING_SEVERITY_MAX == 4
+
+
     def test_findings_need_a_severity_in_range(self):
-        for severity in (0, 4):
+        for severity in (0, 5):
             with pytest.raises(ValidationError):
                 NegativeTonePhrase(quoted_negative_tone_phrase="x", explanation="", suggested_rewrite="",
                                    category=ModerationCategory.INSULT, severity=severity)

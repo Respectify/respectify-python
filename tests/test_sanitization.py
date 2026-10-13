@@ -355,7 +355,6 @@ class TestPerspectiveSanitization:
             "relevance_check": None,
             "dogwhistle_check": None,
             "perspective": {"attributeScores": {}, "languages": ["en"]},
-            "llm_detection": None,
         })
         with mock_httpx_post(mock_resp) as mocked_client:
             client.megacall(

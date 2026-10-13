@@ -298,7 +298,7 @@ PHP_FINDING_CATEGORY_DOC = (
     "Empty if the server did not supply it."
 )
 PHP_FINDING_SEVERITY_DOC = (
-    "How serious this finding is: 1 minor, 2 clear, 3 severe (0 if the server did not supply it).\n"
+    "How serious this finding is: 1 minor, 2 clear, 3 severe, 4 extreme (0 if the server did not supply it).\n"
     "A site relaxed about this kind of problem is not sent severity-1 findings."
 )
 PHP_FIELD_DOC_OVERRIDES: dict[tuple[str, str], str] = {

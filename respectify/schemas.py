@@ -39,14 +39,16 @@ class ToleranceLevel(str, Enum):
 
     For a problem category, by the worst finding of that kind:
       OFF            -- not assessed: the item is left out of comment health
-      RELAXED        -- accepts minor and clear findings; only severe ones fail
-      STANDARD       -- accepts minor findings; clear and severe ones fail
+      PERMISSIVE     -- accepts minor, clear and severe findings; only the very worst (extreme) fail
+      RELAXED        -- accepts minor and clear findings; severe and extreme ones fail
+      STANDARD       -- accepts minor findings; clear and worse ones fail
       STRICT         -- accepts no findings
       ZERO_TOLERANCE -- accepts no findings, and any hint of one gets a full assessment
-    For quality, the lowest quality score accepted: RELAXED 2, STANDARD 3, STRICT 4, ZERO_TOLERANCE 5.
+    For quality, the lowest quality score accepted: PERMISSIVE and RELAXED 2, STANDARD 3, STRICT 4, ZERO_TOLERANCE 5.
     """
 
     OFF = "off"
+    PERMISSIVE = "permissive"
     RELAXED = "relaxed"
     STANDARD = "standard"
     STRICT = "strict"
@@ -61,7 +63,7 @@ class ModerationTolerances(BaseModel):
     """A site's level for each comment-health item: the nine problem categories, and quality. Omitted items are STANDARD.
 
     Floored categories (threats, identity attacks, sexual content, harassment)
-    reject RELAXED and OFF: they can be made stricter, never relaxed or turned off.
+    reject PERMISSIVE, RELAXED and OFF: they can be made stricter, never relaxed or turned off.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -80,7 +82,7 @@ class ModerationTolerances(BaseModel):
     @model_validator(mode="after")
     def _floored_categories_are_never_relaxed(self) -> "ModerationTolerances":
         relaxed_floors = sorted(category.value for category in FLOORED_MODERATION_CATEGORIES
-                                if self.level_for(category) in (ToleranceLevel.RELAXED, ToleranceLevel.OFF))
+                                if self.level_for(category) in (ToleranceLevel.PERMISSIVE, ToleranceLevel.RELAXED, ToleranceLevel.OFF))
         if relaxed_floors:
             raise ValueError(f"These categories can be made stricter but not relaxed or turned off: {', '.join(relaxed_floors)}")
         return self
@@ -89,9 +91,9 @@ class ModerationTolerances(BaseModel):
         return getattr(self, category.value)
 
 
-# Severity of one finding: 1 minor, 2 clear, 3 severe
+# Severity of one finding: 1 minor, 2 clear, 3 severe, 4 extreme (the very worst: no level accepts it)
 FINDING_SEVERITY_MIN = 1
-FINDING_SEVERITY_MAX = 3
+FINDING_SEVERITY_MAX = 4
 
 
 class LogicalFallacy(BaseModel):
@@ -104,7 +106,7 @@ class LogicalFallacy(BaseModel):
     explanation: str = Field(..., description="Explanation of the fallacy and suggestions for improvement")
     suggested_rewrite: str = Field(..., description="Suggested rewrite (only provided when comment appears good-faith; otherwise empty)")
     severity: int = Field(..., ge=FINDING_SEVERITY_MIN, le=FINDING_SEVERITY_MAX,
-                          description="1 minor, 2 clear, 3 severe")
+                          description="1 minor, 2 clear, 3 severe, 4 extreme")
 
 
 class ObjectionablePhrase(BaseModel):
@@ -117,7 +119,7 @@ class ObjectionablePhrase(BaseModel):
     suggested_rewrite: str = Field(..., description="Suggested rewrite (only provided when comment appears good-faith; otherwise empty)")
     category: ModerationCategory = Field(..., description="What kind of problem the phrase is")
     severity: int = Field(..., ge=FINDING_SEVERITY_MIN, le=FINDING_SEVERITY_MAX,
-                          description="1 minor, 2 clear, 3 severe")
+                          description="1 minor, 2 clear, 3 severe, 4 extreme")
 
 
 class NegativeTonePhrase(BaseModel):
@@ -130,7 +132,7 @@ class NegativeTonePhrase(BaseModel):
     suggested_rewrite: str = Field(..., description="Suggested rewrite (only provided when comment appears good-faith; otherwise empty)")
     category: ModerationCategory = Field(..., description="What kind of problem the phrase is")
     severity: int = Field(..., ge=FINDING_SEVERITY_MIN, le=FINDING_SEVERITY_MAX,
-                          description="1 minor, 2 clear, 3 severe")
+                          description="1 minor, 2 clear, 3 severe, 4 extreme")
 
 
 class HealthItemScore(BaseModel):
@@ -138,7 +140,7 @@ class HealthItemScore(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    score: int = Field(..., ge=1, le=5, description="5 means nothing found. For a category: minor finding 4, clear 2, severe 1. For quality: the quality score.")
+    score: int = Field(..., ge=1, le=5, description="5 means nothing found. For a category: minor finding 4, clear 3, severe 2, extreme 1. For quality: the quality score.")
     minimum: int = Field(..., ge=1, le=5, description="The lowest score this item's level accepts")
     is_acceptable: bool = Field(..., description="Whether score is at or above minimum")
 
@@ -153,7 +155,7 @@ class CommentAssessment(BaseModel):
     
     logical_fallacies: List[LogicalFallacy] = Field(default_factory=list, description="List of logical fallacies found")
     objectionable_phrases: List[ObjectionablePhrase] = Field(default_factory=list, description="List of objectionable phrases found") 
-    negative_tone_phrases: List[NegativeTonePhrase] = Field(default_factory=list, description="List of phrases with negative tone")
+    negative_tone_phrases: List[NegativeTonePhrase] = Field(default_factory=list, description="Phrases that are REALLY negative or REALLY dismissive of a person: contempt, ridicule, or writing them off. Blunt, curt or mildly sarcastic criticism of a view or idea is never listed")
     appears_low_effort: bool = Field(..., description="Whether the comment appears to be low effort")
     overall_score: int = Field(..., ge=1, le=5, description="Overall quality score (1=poor, 5=excellent)")
     toxicity_score: float = Field(..., ge=0.0, le=1.0, description="Toxicity score (0.0=not toxic, 1.0=highly toxic)")
@@ -361,27 +363,6 @@ class PerspectiveSuggestCommentScoreResponse(BaseModel):
     )
 
 
-class LlmDetectionSignal(BaseModel):
-    """A specific signal indicating LLM-generated text."""
-
-    model_config = ConfigDict(frozen=True)
-
-    signal_type: str = Field(..., description="Category: 'word_frequency', 'structural', 'stylistic', 'epistemic'")
-    description: str = Field(..., description="What was detected")
-    quoted_text: str = Field(default="", description="The text that triggered this signal, if applicable")
-
-
-class LlmDetectionResult(BaseModel):
-    """Result of LLM-likeness detection for a comment."""
-
-    model_config = ConfigDict(frozen=True)
-
-    llm_likelihood: float = Field(..., ge=0.0, le=1.0, description="Probability the text was generated by an LLM (0.0=human, 1.0=certainly LLM)")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence in the verdict")
-    signals_detected: List[LlmDetectionSignal] = Field(default_factory=list, description="Specific signals that contributed to the score")
-    reasoning: str = Field(..., description="Explanation of the analysis")
-
-
 class MegaCallResult(BaseModel):
     """Represents the result of a mega call containing multiple analysis types."""
 
@@ -395,7 +376,6 @@ class MegaCallResult(BaseModel):
         None,
         description="Perspective-compatible analyzeComment response. Null unless requested via include_perspective_analyze_comment (Python) or 'perspectiveAnalyzeComment' service (PHP).",
     )
-    llm_detection: Optional[LlmDetectionResult] = Field(None, description="LLM-likeness detection result. Null unless requested via include_llm_detection.")
 
     @property
     def spam(self) -> Optional[SpamDetectionResult]:
