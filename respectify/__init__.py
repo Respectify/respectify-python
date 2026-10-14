@@ -5,14 +5,23 @@ asynchronous interfaces for comment moderation, spam detection, toxicity analysi
 and dogwhistle detection.
 """
 
-__version__ = "0.6.0"
+__version__ = "0.8.0"
 
 from respectify.client import RespectifyClient
 from respectify.client_async import RespectifyAsyncClient
 from respectify.perspective import RespectifyPerspectiveClient
 from respectify.perspective_async import RespectifyAsyncPerspectiveClient
 from respectify.schemas import (
+    CommentAssessment,
     CommentScore,
+    FINDING_SEVERITY_MAX,
+    FINDING_SEVERITY_MIN,
+    FLOORED_MODERATION_CATEGORIES,
+    QUALITY_HEALTH_ITEM,
+    HealthItemScore,
+    ModerationCategory,
+    ModerationTolerances,
+    ToleranceLevel,
     DogwhistleResult,
     LogicalFallacy,
     MegaCallResult,
@@ -32,8 +41,6 @@ from respectify.schemas import (
     PerspectiveAnalyzeCommentAttributeScore,
     PerspectiveAnalyzeCommentResponse,
     PerspectiveSuggestCommentScoreResponse,
-    LlmDetectionSignal,
-    LlmDetectionResult,
 )
 from respectify.exceptions import (
     RespectifyError,
@@ -52,7 +59,16 @@ __all__ = [
     "RespectifyPerspectiveClient",
     "RespectifyAsyncPerspectiveClient",
     # Schemas
+    "CommentAssessment",
     "CommentScore",
+    "FINDING_SEVERITY_MAX",
+    "FINDING_SEVERITY_MIN",
+    "FLOORED_MODERATION_CATEGORIES",
+    "QUALITY_HEALTH_ITEM",
+    "HealthItemScore",
+    "ModerationCategory",
+    "ModerationTolerances",
+    "ToleranceLevel",
     "DogwhistleResult",
     "LogicalFallacy",
     "MegaCallResult", 
@@ -72,8 +88,6 @@ __all__ = [
     "PerspectiveAnalyzeCommentAttributeScore",
     "PerspectiveAnalyzeCommentResponse",
     "PerspectiveSuggestCommentScoreResponse",
-    "LlmDetectionSignal",
-    "LlmDetectionResult",
     # Exceptions
     "RespectifyError",
     "AuthenticationError",

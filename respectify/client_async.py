@@ -11,9 +11,9 @@ from respectify.perspective_async import RespectifyAsyncPerspectiveClient
 from respectify.schemas import (
     CommentRelevanceResult,
     CommentScore,
+    ModerationTolerances,
     DogwhistleResult,
     InitTopicResponse,
-    LlmDetectionResult,
     MegaCallResult,
     SpamDetectionResult,
     UserCheckResponse,
@@ -186,7 +186,8 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         self,
         comment: str,
         article_id: UUID,
-        reply_to_comment: Optional[str] = None
+        reply_to_comment: Optional[str] = None,
+        tolerances: Optional[ModerationTolerances] = None
     ) -> CommentScore:
         """Evaluate a comment's quality and toxicity.
 
@@ -194,6 +195,7 @@ class RespectifyAsyncClient(BaseRespectifyClient):
             comment: The comment text to evaluate
             article_id: UUID of the article/topic
             reply_to_comment: Optional text of the comment being replied to, for context
+            tolerances: Optional comment-health levels for this call; items not named are standard
 
         Returns:
             CommentScore containing comprehensive evaluation
@@ -204,12 +206,14 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         url: str = self._build_url("commentscore")
         headers: Dict[str, str] = self._build_headers()
 
-        data: Dict[str, str] = {
+        data: Dict[str, Union[str, Dict[str, str]]] = {
             "comment": comment,
             "article_context_id": str(article_id)
         }
         if reply_to_comment is not None:
             data["reply_to_comment"] = reply_to_comment
+        if tolerances is not None:
+            data["tolerances"] = tolerances.model_dump(mode="json", exclude_unset=True)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response: httpx.Response = await client.post(url, json=data, headers=headers)
@@ -271,12 +275,12 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         include_comment_score: bool = False,
         include_dogwhistle: bool = False,
         include_perspective_analyze_comment: bool = False,
-        include_llm_detection: bool = False,
         banned_topics: Optional[List[str]] = None,
         sensitive_topics: Optional[List[str]] = None,
         dogwhistle_examples: Optional[List[str]] = None,
         reply_to_comment: Optional[str] = None,
-        context_comments: Optional[List[str]] = None
+        context_comments: Optional[List[str]] = None,
+        tolerances: Optional[ModerationTolerances] = None
     ) -> MegaCallResult:
         """Perform multiple analysis types in a single API call.
 
@@ -288,12 +292,12 @@ class RespectifyAsyncClient(BaseRespectifyClient):
             include_comment_score: Include comment quality scoring
             include_dogwhistle: Include dogwhistle detection
             include_perspective_analyze_comment: Include Perspective-compatible analyzeComment scoring
-            include_llm_detection: Include LLM-likeness detection
             banned_topics: Optional list of banned topics for relevance check
             sensitive_topics: Optional list of sensitive topics for dogwhistle check
             dogwhistle_examples: Optional list of dogwhistle examples
             reply_to_comment: Optional text of the comment being replied to, for comment score context
             context_comments: Optional prior comments for perspective context
+            tolerances: Optional comment-health levels for the comment score; items not named are standard
 
         Returns:
             MegaCallResult containing requested analysis results
@@ -304,14 +308,13 @@ class RespectifyAsyncClient(BaseRespectifyClient):
         url: str = self._build_url("megacall")
         headers: Dict[str, str] = self._build_headers()
 
-        data: Dict[str, Union[str, bool, List[str]]] = {
+        data: Dict[str, Union[str, bool, List[str], Dict[str, str]]] = {
             "comment": comment,
             "run_spam_check": include_spam,
             "run_relevance_check": include_relevance,
             "run_comment_score": include_comment_score,
             "run_dogwhistle_check": include_dogwhistle,
             "run_perspective": include_perspective_analyze_comment,
-            "run_llm_detect": include_llm_detection,
         }
 
         if article_id:
@@ -326,6 +329,8 @@ class RespectifyAsyncClient(BaseRespectifyClient):
             data["reply_to_comment"] = reply_to_comment
         if context_comments:
             data["context_comments"] = context_comments
+        if tolerances is not None:
+            data["tolerances"] = tolerances.model_dump(mode="json", exclude_unset=True)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response: httpx.Response = await client.post(url, json=data, headers=headers)
@@ -335,39 +340,11 @@ class RespectifyAsyncClient(BaseRespectifyClient):
 
             return self._parse_response(response, MegaCallResult)
     @beartype
-    async def check_llm_likeness(
-        self,
-        comment: str,
-    ) -> LlmDetectionResult:
-        """Check whether a comment appears to be written by an LLM.
-
-        Args:
-            comment: The comment text to analyze
-
-        Returns:
-            LlmDetectionResult with likelihood score and detected signals
-
-        Raises:
-            RespectifyError: If the request fails
-        """
-        url: str = self._build_url("llmdetect")
-        headers: Dict[str, str] = self._build_headers()
-
-        data: Dict[str, str] = {"comment": comment}
-
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response: httpx.Response = await client.post(url, json=data, headers=headers)
-
-            if response.status_code != 200:
-                self._handle_error_response(response)
-
-            return self._parse_response(response, LlmDetectionResult)
-    @beartype
     async def check_user_credentials(self) -> UserCheckResponse:
-        """Verify user credentials and check subscription status.
+        """Verify user credentials and check the account's credit balance.
 
         Returns:
-            UserCheckResponse containing subscription status (active, plan_name, etc.)
+            UserCheckResponse describing the credit balance (active, status, plan_name, etc.)
 
         Raises:
             AuthenticationError: If credentials are invalid (401)

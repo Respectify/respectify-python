@@ -104,15 +104,15 @@ class TestServerApiErrorFormat:
 
     def test_402_payment_required(self, client):
         mock_resp = make_mock_response(402, {
-            "error": "Payment Required",
-            "message": "An active subscription is required to access this API.",
+            "error": "Insufficient balance",
+            "message": "Your balance is $0.00. This call costs $0.007. Add funds to continue.",
             "code": 402,
         })
         with mock_httpx_post(mock_resp):
             with pytest.raises(PaymentRequiredError) as exc_info:
                 client.evaluate_comment("test", UUID("00000000-0000-0000-0000-000000000000"))
             err = exc_info.value
-            assert err.message == "An active subscription is required to access this API."
+            assert err.message == "Your balance is $0.00. This call costs $0.007. Add funds to continue."
             assert err.status_code == 402
 
     def test_415_unsupported_media_type(self, client):

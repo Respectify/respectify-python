@@ -11,11 +11,21 @@ Usage:
     python schema_generator.py
 """
 
+import argparse
 import ast
 import re
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+
+# Python type names and the PHP scalar types they become
+PYTHON_TO_PHP_SCALAR_TYPES = {
+    'str': 'string',
+    'int': 'int',
+    'float': 'float',
+    'bool': 'bool',
+    'UUID': 'string',  # UUIDs are strings in PHP
+}
 
 
 @dataclass
@@ -25,7 +35,10 @@ class FieldInfo:
     type_hint: str  # Python type hint
     description: str
     default: Optional[str] = None
-    constraints: Dict[str, str] = None  # e.g., ge=1, le=5
+    constraints: dict[str, str] = None  # e.g., ge=1, le=5
+    # Names of the str Enums in schemas.py. PHP 7.4 has no native enums, so a field of one of these
+    # types is a plain PHP string holding the enum's value.
+    enum_names: frozenset[str] = frozenset()
 
     def __post_init__(self):
         if self.constraints is None:
@@ -40,46 +53,32 @@ class FieldInfo:
         return parts[0] + ''.join(word.capitalize() for word in parts[1:])
 
     @property
+    def is_optional(self) -> bool:
+        return 'Optional[' in self.type_hint
+
+    @property
+    def base_type(self) -> str:
+        """The type hint with any Optional[...] wrapper removed, e.g. 'Optional[CommentScore]' -> 'CommentScore'."""
+        match = re.fullmatch(r'Optional\[(.+)\]', self.type_hint)
+        return match.group(1) if match else self.type_hint
+
+    @property
+    def is_enum(self) -> bool:
+        return self.base_type in self.enum_names
+
+    @property
     def php_type(self) -> str:
         """Convert Python type to PHP type."""
-        is_optional = 'Optional[' in self.type_hint
+        if 'List[' in self.type_hint or 'Dict[' in self.type_hint:
+            return '?array' if self.is_optional else 'array'
 
-        if is_optional and ('List[' in self.type_hint or 'Dict[' in self.type_hint):
-            return '?array'
+        if self.is_enum:
+            php_base_type = 'string'
+        else:
+            # Anything that is not a scalar is a class name
+            php_base_type = PYTHON_TO_PHP_SCALAR_TYPES.get(self.base_type, self.base_type)
 
-        # Handle List[X]
-        if 'List[' in self.type_hint:
-            return 'array'
-        if 'Dict[' in self.type_hint:
-            return 'array'
-
-        # Handle Optional[X]
-        type_clean = self.type_hint.replace('Optional[', '').replace(']', '')
-
-        type_map = {
-            'str': 'string',
-            'int': 'int',
-            'float': 'float',
-            'bool': 'bool',
-            'UUID': 'string',  # UUIDs are strings in PHP
-        }
-
-        # Check for custom classes
-        php_base_type = None
-        for py_type, php_type in type_map.items():
-            if py_type in type_clean:
-                php_base_type = php_type
-                break
-
-        # If not found in map, it's a class name
-        if php_base_type is None:
-            php_base_type = type_clean
-
-        # Add ? for nullable types
-        if is_optional:
-            return f"?{php_base_type}"
-
-        return php_base_type
+        return f"?{php_base_type}" if self.is_optional else php_base_type
 
     @property
     def json_name(self) -> str:
@@ -92,9 +91,18 @@ class SchemaInfo:
     """Information about a schema class."""
     name: str
     docstring: str
-    fields: List[FieldInfo]
+    fields: list[FieldInfo]  # Includes fields inherited from base_name, base fields first
     is_frozen: bool = True
     has_properties: bool = False  # For MegaCallResult aliases
+    base_name: Optional[str] = None  # The schema this one subclasses, if not BaseModel directly
+
+
+@dataclass
+class EnumInfo:
+    """Information about a str Enum in schemas.py."""
+    name: str
+    docstring: str
+    values: list[str]
 
 
 class SchemaParser:
@@ -102,29 +110,74 @@ class SchemaParser:
 
     def __init__(self, schema_file: Path):
         self.schema_file = schema_file
-        with open(schema_file, 'r') as f:
+        with open(schema_file) as f:
             self.tree = ast.parse(f.read())
+        self.constants = self._parse_module_constants()
+        self.enums = self._parse_enums()
 
-    def parse_schemas(self) -> List[SchemaInfo]:
-        """Parse all schema classes from the file."""
+    def _parse_module_constants(self) -> dict[str, str]:
+        """Module-level literal constants (e.g. FINDING_SEVERITY_MAX = 3), so constraints can show their values."""
+        constants = {}
+        for node in self.tree.body:
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        constants[target.id] = ast.unparse(node.value)
+            elif (isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+                  and isinstance(node.value, ast.Constant)):
+                constants[node.target.id] = ast.unparse(node.value)
+        return constants
+
+    def _parse_enums(self) -> dict[str, EnumInfo]:
+        """Top-level Enum subclasses (e.g. class ToleranceLevel(str, Enum)) and their values."""
+        enums = {}
+        for node in self.tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            base_names = {base.id for base in node.bases if isinstance(base, ast.Name)}
+            if 'Enum' not in base_names:
+                continue
+            values = []
+            for item in node.body:
+                if (isinstance(item, ast.Assign) and isinstance(item.value, ast.Constant)
+                        and isinstance(item.value.value, str)):
+                    values.append(item.value.value)
+            enums[node.name] = EnumInfo(name=node.name, docstring=ast.get_docstring(node) or "", values=values)
+        return enums
+
+    def parse_schemas(self) -> list[SchemaInfo]:
+        """Parse all schema classes from the file, in file order.
+
+        A schema is a BaseModel subclass, directly or through another schema defined earlier in the file
+        (e.g. CommentScore(CommentAssessment)). A subclass gets its base's fields first, then its own.
+        """
         schemas = []
+        schema_map = {}
 
-        for node in ast.walk(self.tree):
-            if isinstance(node, ast.ClassDef):
-                # Only process BaseModel subclasses
-                if any(base.id == 'BaseModel' for base in node.bases if isinstance(base, ast.Name)):
-                    schema = self._parse_class(node)
-                    schemas.append(schema)
+        for node in self.tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            base_names = [base.id for base in node.bases if isinstance(base, ast.Name)]
+            schema_base_names = [name for name in base_names if name in schema_map]
+            if 'BaseModel' not in base_names and not schema_base_names:
+                continue
+            if len(schema_base_names) > 1:
+                raise ValueError(f"{node.name} has more than one schema base class; PHP classes cannot express that")
+
+            base_schema = schema_map[schema_base_names[0]] if schema_base_names else None
+            schema = self._parse_class(node, base_schema)
+            schemas.append(schema)
+            schema_map[schema.name] = schema
 
         return schemas
 
-    def _parse_class(self, node: ast.ClassDef) -> SchemaInfo:
+    def _parse_class(self, node: ast.ClassDef, base_schema: Optional[SchemaInfo] = None) -> SchemaInfo:
         """Parse a single class definition."""
         # Extract docstring
         docstring = ast.get_docstring(node) or ""
 
-        # Check if frozen
-        is_frozen = True
+        # Frozen-ness and model_config are inherited by Pydantic subclasses
+        is_frozen = base_schema.is_frozen if base_schema else True
         has_properties = False
 
         for item in node.body:
@@ -142,21 +195,31 @@ class SchemaParser:
                     if isinstance(decorator, ast.Name) and decorator.id == 'property':
                         has_properties = True
 
-        # Parse fields
-        fields = []
+        # Parse fields: inherited ones first (in base order), a redeclared field replaces its inherited one
+        own_fields = []
         for item in node.body:
             if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
                 field = self._parse_field(item)
                 if field:
-                    fields.append(field)
+                    own_fields.append(field)
+        own_field_names = {field.name for field in own_fields}
+        inherited_fields = [field for field in (base_schema.fields if base_schema else [])
+                            if field.name not in own_field_names]
 
         return SchemaInfo(
             name=node.name,
             docstring=docstring,
-            fields=fields,
+            fields=inherited_fields + own_fields,
             is_frozen=is_frozen,
-            has_properties=has_properties
+            has_properties=has_properties,
+            base_name=base_schema.name if base_schema else None
         )
+
+    def _constraint_value(self, node: ast.expr) -> str:
+        """Show a constraint's value, resolving module constants such as FINDING_SEVERITY_MIN to their literal."""
+        if isinstance(node, ast.Name) and node.id in self.constants:
+            return self.constants[node.id]
+        return ast.unparse(node)
 
     def _parse_field(self, node: ast.AnnAssign) -> Optional[FieldInfo]:
         """Parse a field definition."""
@@ -183,7 +246,7 @@ class SchemaParser:
                         if isinstance(keyword.value, ast.Constant):
                             description = keyword.value.value
                     elif keyword.arg in ('ge', 'le', 'min_length', 'max_length'):
-                        constraints[keyword.arg] = ast.unparse(keyword.value)
+                        constraints[keyword.arg] = self._constraint_value(keyword.value)
                     elif keyword.arg == 'default_factory':
                         default = 'default_factory'
 
@@ -198,19 +261,128 @@ class SchemaParser:
             type_hint=type_hint,
             description=description,
             default=default,
-            constraints=constraints
+            constraints=constraints,
+            enum_names=frozenset(self.enums)
         )
+
+
+@dataclass(frozen=True)
+class PHPExternalClass:
+    """A schema whose PHP class is hand-written elsewhere in respectify-php, so it is referenced, not generated."""
+    fully_qualified_name: str
+    # PHP expression that builds the object from the decoded JSON value; {value} is the PHP expression for it
+    # (e.g. $data['tolerances']), which may be missing or not an array.
+    construct_expression: str
+
+    @property
+    def short_name(self) -> str:
+        return self.fully_qualified_name.rsplit('\\', 1)[-1]
+
+
+# Schemas whose PHP classes live outside src/Schemas. ModerationTolerances is hand-written in src/Moderation
+# because PHP callers construct it (with validation) to send tolerances, not only receive it.
+PHP_EXTERNAL_CLASSES: dict[str, PHPExternalClass] = {
+    'ModerationTolerances': PHPExternalClass(
+        fully_qualified_name='Respectify\\Moderation\\ModerationTolerances',
+        # fromApiResponse is lenient (ignores unknown categories and levels), so a newer server cannot break it
+        construct_expression='ModerationTolerances::fromApiResponse(is_array({value} ?? null) ? {value} : [])',
+    ),
+}
+
+# Schema field descriptions are written for Python and JSON. Where PHP callers need something different
+# (PHP property names, PHP class constants, or what a missing value reads as in PHP), these replace the
+# description in the generated PHPDoc. Keys are (schema name, Python field name).
+PHP_FINDING_CATEGORY_DOC = (
+    "What kind of problem the phrase is: one of the ModerationCategory::FINDING_CATEGORIES values\n"
+    "(threat, identity_attack, sexual_content, harassment, insult, profanity, dismissive_tone).\n"
+    "Empty if the server did not supply it."
+)
+PHP_FINDING_SEVERITY_DOC = (
+    "How serious this finding is: 1 minor, 2 clear, 3 severe, 4 extreme (0 if the server did not supply it).\n"
+    "A site relaxed about this kind of problem is not sent severity-1 findings."
+)
+PHP_FIELD_DOC_OVERRIDES: dict[tuple[str, str], str] = {
+    ('LogicalFallacy', 'severity'): PHP_FINDING_SEVERITY_DOC,
+    ('ObjectionablePhrase', 'category'): PHP_FINDING_CATEGORY_DOC,
+    ('ObjectionablePhrase', 'severity'): PHP_FINDING_SEVERITY_DOC,
+    ('NegativeTonePhrase', 'category'): PHP_FINDING_CATEGORY_DOC,
+    ('NegativeTonePhrase', 'severity'): PHP_FINDING_SEVERITY_DOC,
+    ('CommentScore', 'exceeds_tolerance'): (
+        "True when the comment has a problem the site's tolerances do not accept. This is what integrations\n"
+        "should act on (eg, to coach the commenter). Note `$toxicityScore` is not adjusted for tolerances.\n"
+        "False if the server did not supply it."
+    ),
+    ('CommentScore', 'tolerances'): (
+        "The comment-health levels this score was judged under, as sent with the request.\n"
+        "Items the server did not report read as `standard`."
+    ),
+}
+# Likewise for class docstrings, keyed by schema name
+PHP_CLASS_DOC_OVERRIDES: dict[str, str] = {
+    'CommentScore': (
+        "Represents the comprehensive evaluation of a comment's quality and toxicity, under the site's tolerances.\n"
+        "\n"
+        "Findings below the site's tolerance have already been removed. Use `$exceedsTolerance`, rather than\n"
+        "`$toxicityScore` alone, to decide whether to act on a comment."
+    ),
+}
+
+
+def _phpdoc_lines(text: str, indent: str) -> list[str]:
+    """Format text as the body lines of a PHPDoc block: ' * line', with blank lines as a bare ' *'."""
+    return [f"{indent} * {line}".rstrip() if line.strip() else f"{indent} *" for line in text.split('\n')]
 
 
 class PHPGenerator:
     """Generate PHP class code from schema information."""
 
-    def __init__(self, schemas: List[SchemaInfo]):
+    def __init__(self, schemas: list[SchemaInfo]):
         self.schemas = schemas
         self.schema_map = {s.name: s for s in schemas}
+        self._check_overrides()
+
+    def _check_overrides(self) -> None:
+        """Fail loudly if an override names a schema or field that no longer exists, so overrides cannot rot."""
+        for schema_name, field_name in PHP_FIELD_DOC_OVERRIDES:
+            schema = self.schema_map.get(schema_name)
+            if schema is None or field_name not in {field.name for field in schema.fields}:
+                raise ValueError(f"PHP_FIELD_DOC_OVERRIDES names {schema_name}.{field_name}, which is not a schema field")
+        for schema_name in list(PHP_CLASS_DOC_OVERRIDES) + list(PHP_EXTERNAL_CLASSES):
+            if schema_name not in self.schema_map:
+                raise ValueError(f"PHP override names {schema_name}, which is not a schema")
+
+    def _referenced_type_names(self) -> set:
+        """Every schema name that some field's type refers to (directly or inside Optional/List/Dict)."""
+        referenced = set()
+        for schema in self.schemas:
+            for field in schema.fields:
+                referenced.update(re.findall(r'\w+', field.type_hint))
+        return referenced & set(self.schema_map)
+
+    def php_schemas(self) -> list[SchemaInfo]:
+        """The schemas that get a generated class in src/Schemas.
+
+        Left out: schemas whose PHP class is hand-written (PHP_EXTERNAL_CLASSES), and base classes that exist
+        only to be subclassed and never appear in a response by themselves (e.g. CommentAssessment, whose
+        fields are flattened into CommentScore).
+        """
+        base_names = {schema.base_name for schema in self.schemas if schema.base_name}
+        referenced = self._referenced_type_names()
+        return [schema for schema in self.schemas
+                if schema.name not in PHP_EXTERNAL_CLASSES
+                and not (schema.name in base_names and schema.name not in referenced)]
+
+    def _external_class_for(self, field: FieldInfo) -> Optional[PHPExternalClass]:
+        return PHP_EXTERNAL_CLASSES.get(field.base_type)
 
     def generate_class(self, schema: SchemaInfo) -> str:
         """Generate PHP class code for a schema."""
+        # Hand-written classes the fields refer to, which need a use statement
+        use_statements = sorted({
+            f"use {external.fully_qualified_name};"
+            for external in (self._external_class_for(field) for field in schema.fields) if external
+        })
+
         # Build class definition
         lines = [
             "<?php",
@@ -234,17 +406,20 @@ class PHPGenerator:
             "",
             "namespace Respectify\\Schemas;",
             "",
-            "/**",
-            f" * {schema.docstring}",
-            " */",
-            f"class {schema.name} {{",
         ]
+        if use_statements:
+            lines.extend(use_statements)
+            lines.append("")
+        lines.append("/**")
+        lines.extend(_phpdoc_lines(PHP_CLASS_DOC_OVERRIDES.get(schema.name, schema.docstring), ""))
+        lines.append(" */")
+        lines.append(f"class {schema.name} {{")
 
         # Add properties
         for field in schema.fields:
             lines.append("")
             lines.append("    /**")
-            lines.append(f"     * {field.description}")
+            lines.extend(_phpdoc_lines(PHP_FIELD_DOC_OVERRIDES.get((schema.name, field.name), field.description), "    "))
 
             # Add type constraints as documentation
             if field.constraints:
@@ -252,7 +427,11 @@ class PHPGenerator:
                 lines.append(f"     * Constraints: {constraint_doc}")
 
             lines.append("     */")
-            lines.append(f"    public {field.php_type} ${field.php_name};")
+            php_type = field.php_type
+            external = self._external_class_for(field)
+            if external:
+                php_type = f"?{external.short_name}" if field.is_optional else external.short_name
+            lines.append(f"    public {php_type} ${field.php_name};")
 
         # Add constructor
         lines.append("")
@@ -263,8 +442,15 @@ class PHPGenerator:
         lines.append("    public function __construct(array $data) {")
 
         for field in schema.fields:
+            external = self._external_class_for(field)
             # Determine how to parse this field
-            if 'Optional[' in field.type_hint and 'List[' in field.type_hint:
+            if external:
+                construct = external.construct_expression.format(value=f"$data['{field.json_name}']")
+                if field.is_optional:
+                    lines.append(f"        $this->{field.php_name} = isset($data['{field.json_name}']) ? {construct} : null;")
+                else:
+                    lines.append(f"        $this->{field.php_name} = {construct};")
+            elif 'Optional[' in field.type_hint and 'List[' in field.type_hint:
                 inner_type = re.search(r'Optional\[List\[(\w+)\]\]', field.type_hint)
                 if inner_type:
                     inner_class = inner_type.group(1)
@@ -380,7 +566,7 @@ class MarkdownGenerator:
         'PerspectiveAnalyzeCommentResponse', 'PerspectiveSuggestCommentScoreResponse'
     ]
 
-    def __init__(self, schemas: List[SchemaInfo]):
+    def __init__(self, schemas: list[SchemaInfo]):
         self.schemas = schemas
         self.schema_map = {s.name: s for s in schemas}
         # Build reverse map: which parent has which inline subtypes
@@ -466,7 +652,7 @@ Types are returned as JSON objects in API responses.
 </TabItem>
 </Tabs>"""
 
-    def _generate_field_doc(self, field: FieldInfo, current_schema: str = "") -> List[str]:
+    def _generate_field_doc(self, field: FieldInfo, current_schema: str = "") -> list[str]:
         """Generate documentation for a single field."""
         lines = []
 
@@ -510,7 +696,7 @@ Types are returned as JSON objects in API responses.
 
         return lines
 
-    def _generate_subtype_doc(self, schema: SchemaInfo) -> List[str]:
+    def _generate_subtype_doc(self, schema: SchemaInfo) -> list[str]:
         """Generate inline documentation for a sub-type with Python/PHP/JSON tabs."""
         lines = []
         lines.append(f"### {schema.name}")
@@ -556,6 +742,9 @@ Types are returned as JSON objects in API responses.
 
     def _get_json_example_value(self, field: FieldInfo) -> str:
         """Get an example JSON value for a field (for sub-type documentation)."""
+        if field.is_enum:
+            return '"string"'
+
         type_hint = field.type_hint
 
         # Handle List[X]
@@ -638,6 +827,10 @@ Types are returned as JSON objects in API responses.
     def _format_php_type(self, field: FieldInfo) -> str:
         """Format type for PHP display."""
         type_hint = field.type_hint
+
+        # str Enums are plain strings in PHP 7.4
+        if field.is_enum:
+            return field.php_type
 
         # Handle List[X] -> X[]
         if 'Optional[' in type_hint and 'List[' in type_hint:
@@ -861,6 +1054,9 @@ Types are returned as JSON objects in API responses.
 
     def _get_json_field_example(self, field: FieldInfo) -> str:
         """Get a JSON example value for a field, handling List[str] etc."""
+        if field.is_enum:
+            return '"string"'
+
         type_hint = field.type_hint
 
         if 'List[' in type_hint:
@@ -893,7 +1089,7 @@ Types are returned as JSON objects in API responses.
 
         return self._get_json_example(type_hint)
 
-    def _format_json_schema_and_link(self, field: FieldInfo, current_schema: str = "") -> Tuple[str, Optional[str]]:
+    def _format_json_schema_and_link(self, field: FieldInfo, current_schema: str = "") -> tuple[str, Optional[str]]:
         """Format JSON schema representation and optional link for a field."""
         type_hint = field.type_hint
         inner = self._get_inner_type(type_hint)
@@ -987,54 +1183,62 @@ Types are returned as JSON objects in API responses.
         return json_type
 
 
-def main():
-    """Main entry point."""
-    # Paths
-    script_dir = Path(__file__).parent
-    schema_file = script_dir / 'respectify' / 'schemas.py'
-    php_output_dir = script_dir.parent / 'respectify-php' / 'src' / 'Schemas'
-    docs_output_dir = script_dir.parent / 'discussion-arena-docgen' / 'respectify-docs' / 'docs' / 'reference' / 'schemas'
+DOC_SCHEMAS = [
+    'CommentScore', 'SpamDetectionResult', 'CommentRelevanceResult',
+    'DogwhistleResult', 'MegaCallResult', 'InitTopicResponse',
+    'PerspectiveAnalyzeCommentResponse', 'PerspectiveSuggestCommentScoreResponse'
+]
 
-    print(f"Parsing schemas from: {schema_file}")
 
-    # Parse schemas
-    parser = SchemaParser(schema_file)
-    schemas = parser.parse_schemas()
-
-    print(f"Found {len(schemas)} schemas")
-
-    # Filter to only the main result schemas we want to document
-    doc_schemas = [
-        'CommentScore', 'SpamDetectionResult', 'CommentRelevanceResult',
-        'DogwhistleResult', 'MegaCallResult', 'InitTopicResponse',
-        'PerspectiveAnalyzeCommentResponse', 'PerspectiveSuggestCommentScoreResponse'
-    ]
-
-    # Generate PHP classes
+def generate_php(schema_file: Path, php_output_dir: Path) -> list[Path]:
+    """Generate one PHP class file per schema into php_output_dir and return the paths written."""
+    schemas = SchemaParser(schema_file).parse_schemas()
     php_output_dir.mkdir(parents=True, exist_ok=True)
     php_gen = PHPGenerator(schemas)
 
-    for schema in schemas:
-        php_code = php_gen.generate_class(schema)
+    written = []
+    for schema in php_gen.php_schemas():
         output_file = php_output_dir / f"{schema.name}.php"
+        output_file.write_text(php_gen.generate_class(schema))
+        written.append(output_file)
+    return written
 
-        with open(output_file, 'w') as f:
-            f.write(php_code)
 
-        print(f"Generated PHP: {output_file}")
-
-    # Generate markdown docs (only for main schemas)
+def generate_docs(schema_file: Path, docs_output_dir: Path) -> list[Path]:
+    """Generate markdown docs for the main result schemas into docs_output_dir and return the paths written."""
+    schemas = SchemaParser(schema_file).parse_schemas()
     docs_output_dir.mkdir(parents=True, exist_ok=True)
     md_gen = MarkdownGenerator(schemas)
 
+    written = []
     for schema in schemas:
-        if schema.name in doc_schemas:
-            md_content = md_gen.generate_doc(schema)
+        if schema.name in DOC_SCHEMAS:
             output_file = docs_output_dir / f"{schema.name}.md"
+            output_file.write_text(md_gen.generate_doc(schema))
+            written.append(output_file)
+    return written
 
-            with open(output_file, 'w') as f:
-                f.write(md_content)
 
+def main():
+    """Main entry point."""
+    script_dir = Path(__file__).parent
+    arg_parser = argparse.ArgumentParser(description="Generate PHP classes and markdown docs from respectify/schemas.py")
+    arg_parser.add_argument('--php-dir', type=Path, default=script_dir.parent / 'respectify-php' / 'src' / 'Schemas',
+                            help="Where to write the PHP schema classes")
+    arg_parser.add_argument('--docs-dir', type=Path,
+                            default=script_dir.parent / 'discussion-arena-docgen' / 'respectify-docs' / 'docs' / 'reference' / 'schemas',
+                            help="Where to write the markdown schema docs")
+    arg_parser.add_argument('--skip-docs', action='store_true', help="Generate only the PHP classes")
+    args = arg_parser.parse_args()
+
+    schema_file = script_dir / 'respectify' / 'schemas.py'
+    print(f"Parsing schemas from: {schema_file}")
+
+    for output_file in generate_php(schema_file, args.php_dir):
+        print(f"Generated PHP: {output_file}")
+
+    if not args.skip_docs:
+        for output_file in generate_docs(schema_file, args.docs_dir):
             print(f"Generated docs: {output_file}")
 
     print("\nDone! Remember to:")

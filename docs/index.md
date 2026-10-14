@@ -38,7 +38,7 @@ print(f"Is spam: {spam_result.is_spam}")
 
 # Evaluate comment quality and toxicity
 score = client.evaluate_comment("This is a thoughtful comment", article_id)
-print(f"Overall score: {score.overall_score}/5")
+print(f"Health: {score.overall_score}/5")
 print(f"Toxicity: {score.toxicity_score:.2f}")
 ```
 
@@ -65,7 +65,7 @@ async def main():
     spam_result, score_result = await asyncio.gather(spam_task, score_task)
     
     print(f"Is spam: {spam_result.is_spam}")
-    print(f"Overall score: {score_result.overall_score}/5")
+    print(f"Health: {score_result.overall_score}/5")
 
 asyncio.run(main())
 ```

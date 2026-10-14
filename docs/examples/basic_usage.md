@@ -70,7 +70,7 @@ comment_score = client.evaluate_comment(
     article_id=article_id
 )
 
-print(f"Overall score: {comment_score.overall_score}/5")
+print(f"Health: {comment_score.overall_score}/5")
 print(f"Low effort: {comment_score.appears_low_effort}")
 print(f"Toxicity score: {comment_score.toxicity_score:.2f}")
 print(f"Toxicity explanation: {comment_score.toxicity_explanation}")

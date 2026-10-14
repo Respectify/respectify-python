@@ -92,8 +92,8 @@ Complete API reference for the Respectify Python library, auto-generated from so
 ## Quick Links
 
 For feature-focused documentation with examples, see:
-- [Getting Started](/docs/getting-started/installation)
-- [Features](/docs/features/spam-detection)
+- [Getting Started](/docs/getting-started) and [Installation](/docs/api-installation)
+- [Usage guides](/docs/usage/comment-health), such as comment health and spam detection
 - [Schema Reference](/docs/reference/schemas/) (field-by-field with language tabs)
 """
 

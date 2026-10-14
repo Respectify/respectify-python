@@ -38,7 +38,7 @@ async def sequential_analysis():
     print(f"Spam check: {spam_result.is_spam}")
     
     score_result = await client.evaluate_comment(comment, article_id)
-    print(f"Quality score: {score_result.overall_score}/5")
+    print(f"Health: {score_result.overall_score}/5")
     
     relevance_result = await client.check_relevance(comment, article_id)
     print(f"On topic: {relevance_result.on_topic.is_on_topic}")
@@ -75,7 +75,7 @@ async def concurrent_analysis():
     )
     
     print(f"Spam: {spam_result.is_spam}")
-    print(f"Score: {score_result.overall_score}/5")
+    print(f"Health: {score_result.overall_score}/5")
     print(f"Toxicity: {score_result.toxicity_score:.2f}")
     print(f"On topic: {relevance_result.on_topic.is_on_topic}")
     print(f"Dogwhistles: {dogwhistle_result.detection.dogwhistles_detected}")
@@ -123,7 +123,7 @@ async def batch_process_comments():
         comment = comments[i]
         print(f"\nComment {i+1}: '{comment[:50]}...'")
         print(f"  Spam: {result.spam.is_spam} (confidence: {result.spam.confidence:.2f})")
-        print(f"  Quality: {result.comment_score.overall_score}/5")
+        print(f"  Health: {result.comment_score.overall_score}/5")
         print(f"  Toxicity: {result.comment_score.toxicity_score:.2f}")
         print(f"  Relevant: {result.relevance.on_topic.is_on_topic}")
 
@@ -200,7 +200,7 @@ async def progressive_results():
     # Process results as they complete
     for i, coro in enumerate(asyncio.as_completed(tasks)):
         result = await coro
-        print(f"Completed analysis {i+1}: Quality score {result.overall_score}/5")
+        print(f"Completed analysis {i+1}: Health {result.overall_score}/5")
 
 asyncio.run(progressive_results())
 ```

@@ -53,12 +53,16 @@ class BadRequestError(RespectifyError):
 
 
 class PaymentRequiredError(RespectifyError):
-    """Raised when the account lacks subscription for the requested endpoint (402 Payment Required)."""
+    """Raised when the account's credit balance does not cover the call (402 Payment Required).
+
+    Respectify bills each call against a prepaid credit balance; there are no
+    subscriptions or plans. Add funds to the account, then retry.
+    """
     
     @beartype
     def __init__(
         self, 
-        message: str = "Payment required. Your plan does not include access to this endpoint.",
+        message: str = "Payment required. Your credit balance does not cover this call. Add funds to continue.",
         response_data: Optional[Dict[str, Any]] = None
     ) -> None:
         super().__init__(message, status_code=402, response_data=response_data)
