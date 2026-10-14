@@ -12,7 +12,7 @@ from respectify import (
     ModerationTolerances,
     ToleranceLevel,
 )
-from respectify.schemas import FINDING_SEVERITY_MAX, NegativeTonePhrase
+from respectify.schemas import FINDING_SEVERITY_MAX, NegativeTonePhrase, SpamDetectionResult
 
 
 def _assessment_fields() -> dict:
@@ -191,3 +191,20 @@ class TestClientsSendOnlyNamedCategories:
         asyncio.run(RespectifyAsyncClient("user@example.com", "key").megacall(
             "A comment", include_spam=True, tolerances=ModerationTolerances(low_effort=ToleranceLevel.STRICT)))
         assert sent[0]["tolerances"] == {"low_effort": "strict"}, "Only the category the caller named is sent"
+
+
+class TestSuspectedSpam:
+    """Spam has three outcomes: spam (deleted), suspected spam (sent back with a suggestion), and not spam."""
+
+    def test_suspected_spam_carries_a_suggestion(self):
+        result = SpamDetectionResult.model_validate({"reasoning": "", "is_spam": False, "confidence": 0.3, "suspected_spam": True,
+                                                     "suggestion": "This looks like spam. How about removing the link?"})
+        assert result.suspected_spam is True
+        assert result.suggestion == "This looks like spam. How about removing the link?"
+        assert result.is_spam is False, "Suspected spam is not spam: it is never deleted"
+
+
+    def test_an_older_server_without_the_fields_still_parses(self):
+        result = SpamDetectionResult.model_validate({"reasoning": "", "is_spam": False, "confidence": 0.9})
+        assert result.suspected_spam is False
+        assert result.suggestion == ""

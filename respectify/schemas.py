@@ -181,13 +181,15 @@ class CommentScore(CommentAssessment):
 
 
 class SpamDetectionResult(BaseModel):
-    """Represents the result of spam detection analysis."""
+    """The spam verdict: spam (delete it), suspected spam (send it back with the suggestion), or neither (publish it)."""
     
     model_config = ConfigDict(frozen=True)
     
     reasoning: str = Field(..., description="Explanation of the spam analysis")
     is_spam: bool = Field(..., description="Whether the comment is detected as spam")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence in the verdict (0.0=uncertain, 1.0=certain the verdict is correct)")
+    suspected_spam: bool = Field(False, description="Looks like spam but is not certain: send the comment back to its writer with the suggestion instead of deleting it. Always false when is_spam is true")
+    suggestion: str = Field("", description="What to tell the writer of a suspected-spam comment, e.g. to remove a link. Empty unless suspected_spam is true")
 
 
 class OnTopicResult(BaseModel):
