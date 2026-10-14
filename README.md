@@ -162,7 +162,7 @@ from respectify import (
     RespectifyError,           # Base exception
     AuthenticationError,       # Invalid credentials (401)
     BadRequestError,          # Invalid parameters (400)
-    PaymentRequiredError,     # Subscription required (402)
+    PaymentRequiredError,     # Credit balance too low for the call (402)
     ServerError              # Server issues (500+)
 )
 
@@ -171,7 +171,7 @@ try:
 except AuthenticationError:
     print("Please check your API credentials")
 except PaymentRequiredError:
-    print("This feature requires a paid plan")
+    print("Your credit balance does not cover this call. Add funds to continue.")
 except BadRequestError as e:
     print(f"Invalid request: {e.message}")
 ```

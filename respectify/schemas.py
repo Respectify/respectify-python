@@ -404,7 +404,10 @@ class InitTopicResponse(BaseModel):
 
 
 class UserCheckResponse(BaseModel):
-    """Response from the usercheck endpoint containing subscription status.
+    """Response from the usercheck endpoint describing the account's credit balance.
+
+    Respectify bills each API call against a prepaid credit balance; there are no
+    subscriptions or plans. The usercheck call itself is free.
 
     This is returned directly as the API response - no wrapper needed since
     HTTP 200 indicates success and HTTP 4xx indicates errors.
@@ -412,12 +415,12 @@ class UserCheckResponse(BaseModel):
 
     # Note: Not frozen - server needs to mutate this object
 
-    active: bool = Field(..., description="Whether the subscription is active")
-    status: Optional[str] = Field(None, description="Current subscription status")
-    expires: Optional[str] = Field(None, description="Subscription expiration date")
-    plan_name: Optional[str] = Field(None, description="Name of the subscription plan (e.g., 'Personal', 'Professional', 'Anti-Spam Only')")
-    allowed_endpoints: Optional[List[str]] = Field(None, description="List of API endpoints allowed for this plan (e.g., ['antispam', 'commentscore'])")
-    error: Optional[str] = Field(None, description="Error message if subscription check failed")
+    active: bool = Field(..., description="Whether the account can make paid calls: true when the credit balance is above $0, false when it is $0 or less or the balance could not be read")
+    status: Optional[str] = Field(None, description="Account status: 'active' when the balance is above $0, 'no_credit' when it is $0 or less; null if the balance could not be read")
+    expires: Optional[str] = Field(None, description="Always null: credit balances do not expire. Kept for backward compatibility")
+    plan_name: Optional[str] = Field(None, description="The current credit balance as text, e.g. 'Credit Balance: $12.34'; null if the balance could not be read")
+    allowed_endpoints: Optional[List[str]] = Field(None, description="Always null: every endpoint is available while the balance covers the call's price. Kept for backward compatibility")
+    error: Optional[str] = Field(None, description="Error message if the balance could not be read, e.g. 'Unable to determine account status'; null otherwise")
 
 
 # Backwards compatibility alias

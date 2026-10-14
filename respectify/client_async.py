@@ -341,10 +341,10 @@ class RespectifyAsyncClient(BaseRespectifyClient):
             return self._parse_response(response, MegaCallResult)
     @beartype
     async def check_user_credentials(self) -> UserCheckResponse:
-        """Verify user credentials and check subscription status.
+        """Verify user credentials and check the account's credit balance.
 
         Returns:
-            UserCheckResponse containing subscription status (active, plan_name, etc.)
+            UserCheckResponse describing the credit balance (active, status, plan_name, etc.)
 
         Raises:
             AuthenticationError: If credentials are invalid (401)

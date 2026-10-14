@@ -41,7 +41,7 @@ except BadRequestError as e:
     print("Please check your request parameters")
 except PaymentRequiredError as e:
     print(f"Payment required: {e.message}")
-    print("Your plan doesn't include access to this endpoint")
+    print("Your credit balance does not cover this call. Add funds to continue.")
 except ServerError as e:
     print(f"Server error: {e.message}")
     print("Please try again later")
@@ -96,13 +96,13 @@ def handle_validation_errors(client, article_id):
 ### Payment Required Errors
 
 ```python
-def handle_subscription_errors(client):
+def handle_insufficient_balance(client):
     try:
         result = client.check_dogwhistle("Test comment")
     except PaymentRequiredError as e:
-        print(f"Subscription error: {e.message}")
-        print("This endpoint requires a paid plan")
-        # Redirect user to upgrade page or show pricing
+        print(f"Insufficient balance: {e.message}")
+        print("Add funds to your account, then retry")
+        # Point the user to the billing page to add funds
         return None
     except RespectifyError as e:
         print(f"Other API error: {e.message}")
@@ -230,7 +230,7 @@ class CommentModerator:
             try:
                 results['spam'] = self.client.check_spam(comment, article_id)
             except PaymentRequiredError:
-                print("Spam detection not available in your plan")
+                print("Credit balance does not cover spam detection")
                 self.features_available['spam'] = False
             except RespectifyError as e:
                 print(f"Spam detection error: {e.message}")
@@ -240,7 +240,7 @@ class CommentModerator:
             try:
                 results['quality'] = self.client.evaluate_comment(comment, article_id)
             except PaymentRequiredError:
-                print("Quality scoring not available in your plan")
+                print("Credit balance does not cover quality scoring")
                 self.features_available['quality'] = False
             except RespectifyError as e:
                 print(f"Quality scoring error: {e.message}")
@@ -250,7 +250,7 @@ class CommentModerator:
             try:
                 results['dogwhistle'] = self.client.check_dogwhistle(comment)
             except PaymentRequiredError:
-                print("Dogwhistle detection not available in your plan")
+                print("Credit balance does not cover dogwhistle detection")
                 self.features_available['dogwhistle'] = False
             except RespectifyError as e:
                 print(f"Dogwhistle detection error: {e.message}")
