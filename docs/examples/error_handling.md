@@ -5,12 +5,45 @@ The Respectify Python client provides specific exception classes for different t
 ## Exception Hierarchy
 
 ```
-RespectifyError (base exception)
+RespectifyError (base exception; .status_code, .response_data, .error_code)
 ├── AuthenticationError (401)
 ├── BadRequestError (400)
+│   └── ArticleContextNotFoundError (400, the article context must be regenerated)
 ├── PaymentRequiredError (402)
+│   └── FreeAllowanceExhaustedError (402, error_code "free_allowance_exhausted"; .upgrade_url)
+├── RevisionLimitReachedError (409, error_code "revision_limit_reached")
 ├── UnsupportedMediaTypeError (415)
+├── RateLimitedError (429; .retry_after_seconds, error_code "free_rate_limited" on the free plan)
+├── RequestTimeoutError (no status; wraps httpx timeouts, .timeout_seconds)
 └── ServerError (500+)
+```
+
+## Free Plan Errors
+
+The free plan adds three errors, told apart from the others by the server's machine-readable `error_code`:
+
+```python
+from respectify import (
+    RespectifyClient,
+    FreeAllowanceExhaustedError,
+    RevisionLimitReachedError,
+    RateLimitedError,
+    RequestTimeoutError,
+)
+
+try:
+    response = client.evaluate_comment_response(comment, article_id, revision_token=token)
+except FreeAllowanceExhaustedError as e:
+    # Also a PaymentRequiredError: let the comment through and tell the site owner.
+    print(f"Free comments used up. Add credit at {e.upgrade_url}")
+except RevisionLimitReachedError:
+    # This comment has had all the attempts the plan allows; accept or reject it as it stands.
+    print("No more revisions for this comment")
+except RateLimitedError as e:
+    # Any 429. Free keys have a per-minute cap; the server says when to retry.
+    print(f"Retry in {e.retry_after_seconds} seconds")
+except RequestTimeoutError as e:
+    print(f"No answer within {e.timeout_seconds} seconds")
 ```
 
 ## Basic Error Handling

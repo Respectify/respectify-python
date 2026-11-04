@@ -7,7 +7,8 @@ A Python client library for the [Respectify API](https://respectify.ai), providi
 - **Dual Interface**: Both synchronous (`RespectifyClient`) and asynchronous (`RespectifyAsyncClient`) clients
 - **Type Safety**: Full type hints with Pydantic schema validation  
 - **Comprehensive Coverage**: All Respectify API endpoints supported
-- **Error Handling**: Custom exception classes for different API error conditions
+- **Error Handling**: Custom exception classes for different API error conditions, including the free plan's allowance, revision and rate limits, and request timeouts
+- **Free Plan Revision Tokens**: `*_response` methods return a `RespectifyResponse` with the result and the revision token to send back when a comment is revised
 - **Modern Python**: Uses httpx for HTTP requests, beartype for runtime type checking
 
 ## Installation

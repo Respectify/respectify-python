@@ -128,13 +128,15 @@ print(f"Dogwhistles: {result.dogwhistle.detection.dogwhistles_detected if result
 - `init_topic_from_url(url, topic_description=None)` - Initialize topic from URL
 
 **Comment Analysis:**
-- `evaluate_comment(comment, article_id)` - Evaluates a comment on logical fallacies, objectionable phrases, negative tone, low effort
-- `check_relevance(comment, article_id, banned_topics=None)` - Relevance and banned topic detection
-- `check_dogwhistle(comment, sensitive_topics=None, dogwhistle_examples=None)` - Dogwhistle detection
-- `check_spam(comment, article_id)` - Spam detection
+- `evaluate_comment(comment, article_id, revision_token=None)` - Evaluates a comment on logical fallacies, objectionable phrases, negative tone, low effort
+- `check_relevance(comment, article_id, banned_topics=None, revision_token=None)` - Relevance and banned topic detection
+- `check_dogwhistle(comment, article_id, sensitive_topics=None, dogwhistle_examples=None, revision_token=None)` - Dogwhistle detection
+- `check_spam(comment, article_id=None, revision_token=None)` - Spam detection
+
+Each of these has a `*_response` twin (`evaluate_comment_response`, `check_spam_response`, ...) that returns a `RespectifyResponse` with the same result in `.result` plus the free plan's `.revision_token` (see below).
 
 **Batch Operations:**
-- `megacall(comment, article_id, **options)` - Multiple analyses in one call
+- `megacall(comment, article_id, **options)` - Multiple analyses in one call (`megacall_response` returns the `RespectifyResponse`)
 
 **Perspective Compatibility:**
 - `client.perspective.analyze_comment(request)` - Public Perspective-compatible `analyzeComment`
@@ -154,27 +156,49 @@ All API responses are parsed into strongly-typed Pydantic models:
 - `DogwhistleResult` - Dogwhistle detection with detailed analysis
 - `MegaCallResult` - Container for multiple analysis results
 - `UserCheckResponse` - Authentication verification result
+- `RespectifyResponse[T]` - Returned by the `*_response` methods: the parsed result in `.result` and the free plan's `.revision_token`
 
 ### Error Handling
 
 ```python
 from respectify import (
-    RespectifyError,           # Base exception
-    AuthenticationError,       # Invalid credentials (401)
-    BadRequestError,          # Invalid parameters (400)
-    PaymentRequiredError,     # Credit balance too low for the call (402)
-    ServerError              # Server issues (500+)
+    RespectifyError,                # Base exception; .error_code is the server's machine-readable code, if any
+    AuthenticationError,            # Invalid credentials (401)
+    BadRequestError,                # Invalid parameters (400)
+    PaymentRequiredError,           # Credit balance too low for the call (402)
+    FreeAllowanceExhaustedError,    # Free plan's comments used up (402, subclass of PaymentRequiredError); .upgrade_url
+    RevisionLimitReachedError,      # Free plan: this comment has had all its attempts (409)
+    RateLimitedError,               # Too many requests (429); .retry_after_seconds when the server says
+    RequestTimeoutError,            # The request timed out before a response arrived; .timeout_seconds
+    ServerError,                    # Server issues (500+)
 )
 
 try:
     result = client.check_spam("test", article_id)
 except AuthenticationError:
     print("Please check your API credentials")
+except FreeAllowanceExhaustedError as e:
+    print(f"Free comments used up. Add credit at {e.upgrade_url}")
 except PaymentRequiredError:
     print("Your credit balance does not cover this call. Add funds to continue.")
+except RateLimitedError as e:
+    print(f"Slow down; retry in {e.retry_after_seconds} seconds")
 except BadRequestError as e:
     print(f"Invalid request: {e.message}")
 ```
+
+### The Free Plan and Revision Tokens
+
+On the free plan each comment is assessed free of charge a limited number of times: the first assessment plus a few revisions, after the writer has been shown what to improve. The server tells the two apart with a token it issues in the `X-Respectify-Revision-Token` response header. Read it with a `*_response` method and send it back with `revision_token=` when the same comment is re-assessed, so the revision is not counted as a new comment:
+
+```python
+first = client.evaluate_comment_response(comment, article_id)
+if first.result.exceeds_tolerance:
+    # Show first.result's findings to the writer and let them revise, then:
+    revised = client.evaluate_comment(revised_comment, article_id, revision_token=first.revision_token)
+```
+
+`revision_token` is `None` for paid accounts, which never receive one, and the Perspective-compatible endpoints never use it. Sending the token back once the comment has had all its attempts raises `RevisionLimitReachedError`; using up the plan's free comments raises `FreeAllowanceExhaustedError`, whose `upgrade_url` points at the billing page.
 
 ### Response Sanitization
 

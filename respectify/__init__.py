@@ -5,7 +5,7 @@ asynchronous interfaces for comment moderation, spam detection, toxicity analysi
 and dogwhistle detection.
 """
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 from respectify._base import RespectifyResponse, REVISION_TOKEN_HEADER
 from respectify.client import RespectifyClient
