@@ -1,8 +1,9 @@
 """Base client functionality shared between sync and async clients."""
 
 from contextlib import contextmanager
+from dataclasses import dataclass
 from html import escape as html_escape, unescape as html_unescape
-from typing import Any, Dict, Iterator, Optional, Type, TypeVar, Union
+from typing import Any, Dict, Generic, Iterator, Optional, Type, TypeVar
 from urllib.parse import urljoin
 
 import httpx
@@ -27,6 +28,40 @@ from respectify.exceptions import (
 )
 
 T = TypeVar('T', bound=BaseModel)
+
+# Response header carrying the free plan's revision token for an assessed comment, and the
+# request header a revision of that comment must send it back in. Cross-SDK contract shared
+# with the backend constant REVISION_TOKEN_HEADER; do not change without coordinating.
+REVISION_TOKEN_HEADER: str = "X-Respectify-Revision-Token"
+
+
+@dataclass(frozen=True)
+class RespectifyResponse(Generic[T]):
+    """A parsed API result together with the response metadata the body does not carry.
+
+    The result models in :mod:`respectify.schemas` are shared with the server and its docs,
+    so they only describe the JSON body. The free plan's revision token travels in a header,
+    and this wrapper is how the ``*_response`` client methods hand it to the caller.
+
+    Attributes:
+        result: The parsed response body (CommentScore, SpamDetectionResult, ...).
+        revision_token: The ``X-Respectify-Revision-Token`` header. Set only when a
+            free-plan request assessed a comment; None for paid accounts and for endpoints
+            that never issue one. Send it back as ``revision_token=`` when the writer revises
+            the same comment, so the revision is not counted as a new comment.
+    """
+
+    result: T
+    revision_token: Optional[str] = None
+
+
+def _revision_token_from(response: httpx.Response) -> Optional[str]:
+    """Return the revision token header value, or None when absent or empty."""
+    raw = response.headers.get(REVISION_TOKEN_HEADER)
+    if not isinstance(raw, str):
+        return None
+    token = raw.strip()
+    return token or None
 
 
 def _retry_after_seconds(response: httpx.Response) -> Optional[int]:
@@ -115,9 +150,13 @@ class BaseRespectifyClient:
         return urljoin(f"{self.base_url}/", versioned_endpoint)
         
     @beartype
-    def _build_headers(self) -> Dict[str, str]:
+    def _build_headers(self, revision_token: Optional[str] = None) -> Dict[str, str]:
         """Build HTTP headers for API requests.
-        
+
+        Args:
+            revision_token: Free-plan revision token from an earlier assessment of the
+                same comment, sent back in ``X-Respectify-Revision-Token``; omitted when None
+
         Returns:
             Dictionary of HTTP headers
         """
@@ -128,6 +167,8 @@ class BaseRespectifyClient:
         }
         if self.website:
             headers["X-Website"] = self.website
+        if revision_token:
+            headers[REVISION_TOKEN_HEADER] = revision_token
         return headers
         
     @contextmanager
@@ -241,3 +282,24 @@ class BaseRespectifyClient:
                 response.status_code,
                 {"raw_response": response.text}
             ) from e
+
+    @beartype
+    def _parse_response_with_token(
+        self, response: httpx.Response, schema_class: Type[T]
+    ) -> RespectifyResponse[T]:
+        """Parse a successful response and pair it with its revision token header, if any.
+
+        Args:
+            response: The HTTP response object
+            schema_class: Pydantic model class to parse the response body
+
+        Returns:
+            RespectifyResponse holding the parsed body and the revision token (or None)
+
+        Raises:
+            RespectifyError: If the response cannot be parsed
+        """
+        return RespectifyResponse(
+            result=self._parse_response(response, schema_class),
+            revision_token=_revision_token_from(response),
+        )

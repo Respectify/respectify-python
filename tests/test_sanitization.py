@@ -21,6 +21,7 @@ def make_mock_response(status_code: int, json_body: dict) -> MagicMock:
     resp.status_code = status_code
     resp.reason_phrase = "OK"
     resp.json.return_value = json_body
+    resp.headers = httpx.Headers()
     resp.is_success = 200 <= status_code < 300
     resp.text = str(json_body)
     return resp

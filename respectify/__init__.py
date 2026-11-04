@@ -7,6 +7,7 @@ and dogwhistle detection.
 
 __version__ = "0.8.0"
 
+from respectify._base import RespectifyResponse, REVISION_TOKEN_HEADER
 from respectify.client import RespectifyClient
 from respectify.client_async import RespectifyAsyncClient
 from respectify.perspective import RespectifyPerspectiveClient
@@ -65,6 +66,9 @@ __all__ = [
     "RespectifyAsyncClient",
     "RespectifyPerspectiveClient",
     "RespectifyAsyncPerspectiveClient",
+    # Response wrapper (body + revision token header)
+    "RespectifyResponse",
+    "REVISION_TOKEN_HEADER",
     # Schemas
     "CommentAssessment",
     "CommentScore",
