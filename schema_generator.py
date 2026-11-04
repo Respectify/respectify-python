@@ -317,6 +317,16 @@ PHP_FIELD_DOC_OVERRIDES: dict[tuple[str, str], str] = {
         "Items the server did not report read as `standard`."
     ),
 }
+# Result schemas the comment-assessing endpoints (commentscore, antispam, commentrelevance, dogwhistle,
+# megacall) return. The HTTP response for these may carry the free plan's X-Respectify-Revision-Token header,
+# which is not part of the JSON body, so their PHP classes implement Respectify\Revision\RevisionTokenCarrier
+# (through the CarriesRevisionToken trait) and the client sets the token from the header after construction.
+PHP_REVISION_TOKEN_CARRIERS: frozenset[str] = frozenset({
+    'CommentScore', 'SpamDetectionResult', 'CommentRelevanceResult', 'DogwhistleResult', 'MegaCallResult',
+})
+PHP_REVISION_TOKEN_INTERFACE = 'Respectify\\Revision\\RevisionTokenCarrier'
+PHP_REVISION_TOKEN_TRAIT = 'Respectify\\Revision\\CarriesRevisionToken'
+
 # Likewise for class docstrings, keyed by schema name
 PHP_CLASS_DOC_OVERRIDES: dict[str, str] = {
     'CommentScore': (
@@ -378,10 +388,15 @@ class PHPGenerator:
     def generate_class(self, schema: SchemaInfo) -> str:
         """Generate PHP class code for a schema."""
         # Hand-written classes the fields refer to, which need a use statement
-        use_statements = sorted({
+        use_statements = {
             f"use {external.fully_qualified_name};"
             for external in (self._external_class_for(field) for field in schema.fields) if external
-        })
+        }
+        carries_revision_token = schema.name in PHP_REVISION_TOKEN_CARRIERS
+        if carries_revision_token:
+            use_statements.add(f"use {PHP_REVISION_TOKEN_INTERFACE};")
+            use_statements.add(f"use {PHP_REVISION_TOKEN_TRAIT};")
+        use_statements = sorted(use_statements)
 
         # Build class definition
         lines = [
@@ -413,7 +428,12 @@ class PHPGenerator:
         lines.append("/**")
         lines.extend(_phpdoc_lines(PHP_CLASS_DOC_OVERRIDES.get(schema.name, schema.docstring), ""))
         lines.append(" */")
-        lines.append(f"class {schema.name} {{")
+        if carries_revision_token:
+            lines.append(f"class {schema.name} implements {PHP_REVISION_TOKEN_INTERFACE.rsplit(chr(92), 1)[-1]} {{")
+            lines.append("")
+            lines.append(f"    use {PHP_REVISION_TOKEN_TRAIT.rsplit(chr(92), 1)[-1]};")
+        else:
+            lines.append(f"class {schema.name} {{")
 
         # Add properties
         for field in schema.fields:
