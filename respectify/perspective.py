@@ -12,7 +12,11 @@ from respectify.schemas import (
 
 
 class RespectifyPerspectiveClient:
-    """Thin wrapper over Respectify's public Perspective compatibility endpoints."""
+    """Thin wrapper over Respectify's public Perspective compatibility endpoints.
+
+    Requests go through the parent client's ``_post_json``, so they share its timeout
+    handling and error mapping. These endpoints never use revision tokens.
+    """
 
     @beartype
     def __init__(self, parent_client: Any) -> None:
@@ -24,18 +28,8 @@ class RespectifyPerspectiveClient:
         request: Dict[str, Any],
     ) -> PerspectiveAnalyzeCommentResponse:
         """Call the public Perspective-compatible analyzeComment endpoint."""
-        url = self._parent._build_url("perspective-compat/analyse")
-        headers = self._parent._build_headers()
-
-        with httpx.Client(timeout=self._parent.timeout) as client:
-            response = client.post(url, json=request, headers=headers)
-
-            if response.status_code != 200:
-                self._parent._handle_error_response(response)
-
-            return self._parent._parse_response(
-                response, PerspectiveAnalyzeCommentResponse
-            )
+        response: httpx.Response = self._parent._post_json("perspective-compat/analyse", request)
+        return self._parent._parse_response(response, PerspectiveAnalyzeCommentResponse)
 
     @beartype
     def suggest_comment_score(
@@ -43,15 +37,5 @@ class RespectifyPerspectiveClient:
         request: Dict[str, Any],
     ) -> PerspectiveSuggestCommentScoreResponse:
         """Call the public Perspective-compatible suggestCommentScore endpoint."""
-        url = self._parent._build_url("perspective-compat/suggestscore")
-        headers = self._parent._build_headers()
-
-        with httpx.Client(timeout=self._parent.timeout) as client:
-            response = client.post(url, json=request, headers=headers)
-
-            if response.status_code != 200:
-                self._parent._handle_error_response(response)
-
-            return self._parent._parse_response(
-                response, PerspectiveSuggestCommentScoreResponse
-            )
+        response: httpx.Response = self._parent._post_json("perspective-compat/suggestscore", request)
+        return self._parent._parse_response(response, PerspectiveSuggestCommentScoreResponse)

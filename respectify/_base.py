@@ -1,7 +1,8 @@
 """Base client functionality shared between sync and async clients."""
 
+from contextlib import contextmanager
 from html import escape as html_escape, unescape as html_unescape
-from typing import Any, Dict, Optional, Type, TypeVar, Union
+from typing import Any, Dict, Iterator, Optional, Type, TypeVar, Union
 from urllib.parse import urljoin
 
 import httpx
@@ -17,6 +18,7 @@ from respectify.exceptions import (
     FreeAllowanceExhaustedError,
     PaymentRequiredError,
     RateLimitedError,
+    RequestTimeoutError,
     RespectifyError,
     REVISION_LIMIT_REACHED_ERROR_CODE,
     RevisionLimitReachedError,
@@ -128,6 +130,21 @@ class BaseRespectifyClient:
             headers["X-Website"] = self.website
         return headers
         
+    @contextmanager
+    def _timeout_guard(self) -> Iterator[None]:
+        """Re-raise any httpx timeout raised inside the block as RequestTimeoutError.
+
+        Works around both ``with httpx.Client(...)`` and ``async with httpx.AsyncClient(...)``
+        blocks, so callers of this library only ever see RespectifyError subclasses.
+        """
+        try:
+            yield
+        except httpx.TimeoutException as e:
+            raise RequestTimeoutError(
+                f"The request to Respectify timed out after {self.timeout} seconds.",
+                timeout_seconds=self.timeout,
+            ) from e
+
     @beartype
     def _handle_error_response(self, response: httpx.Response) -> None:
         """Handle HTTP error responses by raising appropriate exceptions.

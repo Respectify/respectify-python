@@ -1,6 +1,6 @@
 """Synchronous client for the Respectify API."""
 
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
 import httpx
@@ -22,7 +22,7 @@ from respectify.schemas import (
 
 class RespectifyClient(BaseRespectifyClient):
     """Synchronous client for the Respectify API."""
-    
+
     @beartype
     def __init__(
         self,
@@ -34,7 +34,7 @@ class RespectifyClient(BaseRespectifyClient):
         website: Optional[str] = None
     ) -> None:
         """Initialize the synchronous Respectify client.
-        
+
         Args:
             email: User email address for authentication
             api_key: API key for authentication
@@ -45,73 +45,95 @@ class RespectifyClient(BaseRespectifyClient):
         """
         super().__init__(email, api_key, base_url, version, timeout, website)
         self.perspective = RespectifyPerspectiveClient(self)
-        
+
+    @beartype
+    def _post_json(self, endpoint: str, data: Dict[str, Any]) -> httpx.Response:
+        """POST a JSON body to an endpoint and return the successful response.
+
+        Raises:
+            RequestTimeoutError: If the request times out
+            RespectifyError: If the server answers with an error status
+        """
+        url: str = self._build_url(endpoint)
+        headers: Dict[str, str] = self._build_headers()
+
+        with self._timeout_guard(), httpx.Client(timeout=self.timeout) as client:
+            response: httpx.Response = client.post(url, json=data, headers=headers)
+
+        if response.status_code != 200:
+            self._handle_error_response(response)
+
+        return response
+
+    @beartype
+    def _get(self, endpoint: str) -> httpx.Response:
+        """GET an endpoint and return the successful response.
+
+        Raises:
+            RequestTimeoutError: If the request times out
+            RespectifyError: If the server answers with an error status
+        """
+        url: str = self._build_url(endpoint)
+        headers: Dict[str, str] = self._build_headers()
+
+        with self._timeout_guard(), httpx.Client(timeout=self.timeout) as client:
+            response: httpx.Response = client.get(url, headers=headers)
+
+        if response.status_code != 200:
+            self._handle_error_response(response)
+
+        return response
+
     @beartype
     def init_topic_from_text(
-        self, 
-        text: str, 
+        self,
+        text: str,
         topic_description: Optional[str] = None
     ) -> InitTopicResponse:
         """Initialize a topic from text content.
-        
+
         Args:
             text: The text content to initialize the topic from
             topic_description: Optional description of the topic
-            
+
         Returns:
             InitTopicResponse containing the article ID
-            
+
         Raises:
             RespectifyError: If the request fails
         """
-        url: str = self._build_url("inittopic")
-        headers: Dict[str, str] = self._build_headers()
-        
         data: Dict[str, str] = {"text": text}
         if topic_description:
             data["topic_description"] = topic_description
-            
-        with httpx.Client(timeout=self.timeout) as client:
-            response: httpx.Response = client.post(url, json=data, headers=headers)
-            
-            if response.status_code != 200:
-                self._handle_error_response(response)
-                
-            return self._parse_response(response, InitTopicResponse)
-    
+
+        response: httpx.Response = self._post_json("inittopic", data)
+        return self._parse_response(response, InitTopicResponse)
+
     @beartype
     def init_topic_from_url(
-        self, 
-        url: str, 
+        self,
+        url: str,
         topic_description: Optional[str] = None
     ) -> InitTopicResponse:
         """Initialize a topic from a URL.
-        
+
         Args:
             url: The URL to initialize the topic from
             topic_description: Optional description of the topic
-            
+
         Returns:
             InitTopicResponse containing the article ID
-            
+
         Raises:
             RespectifyError: If the request fails
         """
-        api_url: str = self._build_url("inittopic")
-        headers: Dict[str, str] = self._build_headers()
-        
         data: Dict[str, str] = {"url": url}
         if topic_description:
             data["topic_description"] = topic_description
-            
-        with httpx.Client(timeout=self.timeout) as client:
-            response: httpx.Response = client.post(api_url, json=data, headers=headers)
-            
-            if response.status_code != 200:
-                self._handle_error_response(response)
-                
-            return self._parse_response(response, InitTopicResponse)
-    
+
+        response: httpx.Response = self._post_json("inittopic", data)
+        return self._parse_response(response, InitTopicResponse)
+
     @beartype
     def check_spam(self, comment: str, article_id: Optional[UUID] = None) -> SpamDetectionResult:
         """Check if a comment is spam.
@@ -126,61 +148,45 @@ class RespectifyClient(BaseRespectifyClient):
         Raises:
             RespectifyError: If the request fails
         """
-        url: str = self._build_url("antispam")
-        headers: Dict[str, str] = self._build_headers()
-
         data: Dict[str, str] = {
             "comment": comment,
         }
         if article_id is not None:
             data["article_context_id"] = str(article_id)
 
-        with httpx.Client(timeout=self.timeout) as client:
-            response: httpx.Response = client.post(url, json=data, headers=headers)
-            
-            if response.status_code != 200:
-                self._handle_error_response(response)
-                
-            return self._parse_response(response, SpamDetectionResult)
-    
+        response: httpx.Response = self._post_json("antispam", data)
+        return self._parse_response(response, SpamDetectionResult)
+
     @beartype
     def check_relevance(
-        self, 
-        comment: str, 
+        self,
+        comment: str,
         article_id: UUID,
         banned_topics: Optional[List[str]] = None
     ) -> CommentRelevanceResult:
         """Check if a comment is relevant to the topic.
-        
+
         Args:
             comment: The comment text to check
             article_id: UUID of the article/topic
             banned_topics: Optional list of banned topics to check against
-            
+
         Returns:
             CommentRelevanceResult containing relevance analysis
-            
+
         Raises:
             RespectifyError: If the request fails
         """
-        url: str = self._build_url("commentrelevance")
-        headers: Dict[str, str] = self._build_headers()
-        
         data: Dict[str, Union[str, List[str]]] = {
             "comment": comment,
             "article_context_id": str(article_id)
         }
         if banned_topics:
             data["banned_topics"] = banned_topics
-            
-        with httpx.Client(timeout=self.timeout) as client:
-            response: httpx.Response = client.post(url, json=data, headers=headers)
-            
-            if response.status_code != 200:
-                self._handle_error_response(response)
-                
-            return self._parse_response(response, CommentRelevanceResult)
-    
+
+        response: httpx.Response = self._post_json("commentrelevance", data)
+        return self._parse_response(response, CommentRelevanceResult)
+
     @beartype
     def evaluate_comment(
         self,
@@ -203,9 +209,6 @@ class RespectifyClient(BaseRespectifyClient):
         Raises:
             RespectifyError: If the request fails
         """
-        url: str = self._build_url("commentscore")
-        headers: Dict[str, str] = self._build_headers()
-
         data: Dict[str, Union[str, Dict[str, str]]] = {
             "comment": comment,
             "article_context_id": str(article_id)
@@ -215,14 +218,9 @@ class RespectifyClient(BaseRespectifyClient):
         if tolerances is not None:
             data["tolerances"] = tolerances.model_dump(mode="json", exclude_unset=True)
 
-        with httpx.Client(timeout=self.timeout) as client:
-            response: httpx.Response = client.post(url, json=data, headers=headers)
-            
-            if response.status_code != 200:
-                self._handle_error_response(response)
-                
-            return self._parse_response(response, CommentScore)
-    
+        response: httpx.Response = self._post_json("commentscore", data)
+        return self._parse_response(response, CommentScore)
+
     @beartype
     def check_dogwhistle(
         self,
@@ -245,9 +243,6 @@ class RespectifyClient(BaseRespectifyClient):
         Raises:
             RespectifyError: If the request fails
         """
-        url: str = self._build_url("dogwhistle")
-        headers: Dict[str, str] = self._build_headers()
-
         data: Dict[str, Union[str, List[str]]] = {
             "comment": comment,
             "article_context_id": str(article_id)
@@ -257,14 +252,9 @@ class RespectifyClient(BaseRespectifyClient):
         if dogwhistle_examples:
             data["dogwhistle_examples"] = dogwhistle_examples
 
-        with httpx.Client(timeout=self.timeout) as client:
-            response: httpx.Response = client.post(url, json=data, headers=headers)
+        response: httpx.Response = self._post_json("dogwhistle", data)
+        return self._parse_response(response, DogwhistleResult)
 
-            if response.status_code != 200:
-                self._handle_error_response(response)
-
-            return self._parse_response(response, DogwhistleResult)
-    
     @beartype
     def megacall(
         self,
@@ -305,9 +295,6 @@ class RespectifyClient(BaseRespectifyClient):
         Raises:
             RespectifyError: If the request fails
         """
-        url: str = self._build_url("megacall")
-        headers: Dict[str, str] = self._build_headers()
-
         data: Dict[str, Union[str, bool, List[str], Dict[str, str]]] = {
             "comment": comment,
             "run_spam_check": include_spam,
@@ -332,13 +319,9 @@ class RespectifyClient(BaseRespectifyClient):
         if tolerances is not None:
             data["tolerances"] = tolerances.model_dump(mode="json", exclude_unset=True)
 
-        with httpx.Client(timeout=self.timeout) as client:
-            response: httpx.Response = client.post(url, json=data, headers=headers)
+        response: httpx.Response = self._post_json("megacall", data)
+        return self._parse_response(response, MegaCallResult)
 
-            if response.status_code != 200:
-                self._handle_error_response(response)
-
-            return self._parse_response(response, MegaCallResult)
     @beartype
     def check_user_credentials(self) -> UserCheckResponse:
         """Verify user credentials and check the account's credit balance.
@@ -350,13 +333,5 @@ class RespectifyClient(BaseRespectifyClient):
             AuthenticationError: If credentials are invalid (401)
             RespectifyError: If the request fails for other reasons
         """
-        url: str = self._build_url("usercheck")
-        headers: Dict[str, str] = self._build_headers()
-
-        with httpx.Client(timeout=self.timeout) as client:
-            response: httpx.Response = client.get(url, headers=headers)
-
-            if response.status_code != 200:
-                self._handle_error_response(response)
-
-            return self._parse_response(response, UserCheckResponse)
+        response: httpx.Response = self._get("usercheck")
+        return self._parse_response(response, UserCheckResponse)

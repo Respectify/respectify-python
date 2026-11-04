@@ -6,11 +6,12 @@ that the SDK correctly extracts error messages and throws the right exception
 types. No real API calls are made.
 """
 from typing import Dict, Optional
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, AsyncMock, MagicMock
 from uuid import UUID
 import httpx
 import pytest
 from respectify.client import RespectifyClient
+from respectify.client_async import RespectifyAsyncClient
 from respectify.exceptions import (
     RespectifyError,
     AuthenticationError,
@@ -20,6 +21,7 @@ from respectify.exceptions import (
     FreeAllowanceExhaustedError,
     RevisionLimitReachedError,
     RateLimitedError,
+    RequestTimeoutError,
     UnsupportedMediaTypeError,
     ServerError,
     FREE_ALLOWANCE_EXHAUSTED_ERROR_CODE,
@@ -57,6 +59,26 @@ def mock_httpx_post(mock_response):
     mock_client.post.return_value = mock_response
     mock_client.get.return_value = mock_response
     return patch("httpx.Client", return_value=mock_client)
+
+
+def mock_httpx_raising(exception: Exception):
+    """Mock httpx.Client so that post() and get() raise the given exception."""
+    mock_client = MagicMock()
+    mock_client.__enter__ = MagicMock(return_value=mock_client)
+    mock_client.__exit__ = MagicMock(return_value=False)
+    mock_client.post.side_effect = exception
+    mock_client.get.side_effect = exception
+    return patch("httpx.Client", return_value=mock_client)
+
+
+def mock_async_httpx_raising(exception: Exception):
+    """Mock httpx.AsyncClient so that post() and get() raise the given exception."""
+    mock_client = MagicMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = AsyncMock(side_effect=exception)
+    mock_client.get = AsyncMock(side_effect=exception)
+    return patch("httpx.AsyncClient", return_value=mock_client)
 
 
 @pytest.fixture
@@ -319,6 +341,53 @@ class TestFreePlanErrors:
             with pytest.raises(RateLimitedError) as exc_info:
                 client.perspective.analyze_comment({"comment": {"text": "x"}})
             assert exc_info.value.retry_after_seconds == 5
+
+
+class TestTimeouts:
+    """httpx timeouts surface as RequestTimeoutError, never as raw httpx exceptions."""
+
+    def test_read_timeout_is_wrapped(self, client):
+        with mock_httpx_raising(httpx.ReadTimeout("read timed out")):
+            with pytest.raises(RequestTimeoutError) as exc_info:
+                client.evaluate_comment("test", ARTICLE_ID)
+            err = exc_info.value
+            assert isinstance(err, RespectifyError)
+            assert err.status_code is None
+            assert err.error_code is None
+            assert err.timeout_seconds == 30.0
+            assert "30.0 seconds" in err.message
+            assert isinstance(err.__cause__, httpx.ReadTimeout)
+
+    def test_connect_timeout_is_wrapped_and_reports_configured_timeout(self):
+        short_client = RespectifyClient(email="test@example.com", api_key="k", timeout=2.5)
+        with mock_httpx_raising(httpx.ConnectTimeout("connect timed out")):
+            with pytest.raises(RequestTimeoutError) as exc_info:
+                short_client.check_user_credentials()
+            assert exc_info.value.timeout_seconds == 2.5
+
+    def test_timeout_is_wrapped_for_the_perspective_client(self, client):
+        with mock_httpx_raising(httpx.PoolTimeout("pool timed out")):
+            with pytest.raises(RequestTimeoutError):
+                client.perspective.analyze_comment({"comment": {"text": "x"}})
+
+    def test_other_transport_errors_are_not_disguised_as_timeouts(self, client):
+        with mock_httpx_raising(httpx.ConnectError("refused")):
+            with pytest.raises(httpx.ConnectError):
+                client.evaluate_comment("test", ARTICLE_ID)
+
+    async def test_async_timeout_is_wrapped(self):
+        async_client = RespectifyAsyncClient(email="test@example.com", api_key="k", timeout=1.0)
+        with mock_async_httpx_raising(httpx.ReadTimeout("read timed out")):
+            with pytest.raises(RequestTimeoutError) as exc_info:
+                await async_client.evaluate_comment("test", ARTICLE_ID)
+            assert exc_info.value.timeout_seconds == 1.0
+            assert isinstance(exc_info.value.__cause__, httpx.ReadTimeout)
+
+    async def test_async_perspective_timeout_is_wrapped(self):
+        async_client = RespectifyAsyncClient(email="test@example.com", api_key="k")
+        with mock_async_httpx_raising(httpx.WriteTimeout("write timed out")):
+            with pytest.raises(RequestTimeoutError):
+                await async_client.perspective.suggest_comment_score({"comment": {"text": "x"}})
 
 
 class TestInitTopicFromUrlFetchFailures:
