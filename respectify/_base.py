@@ -43,16 +43,18 @@ class RespectifyResponse(Generic[T]):
     so they only describe the JSON body. The free plan's revision token travels in a header,
     and this wrapper is how the ``*_response`` client methods hand it to the caller.
 
-    Attributes:
-        result: The parsed response body (CommentScore, SpamDetectionResult, ...).
-        revision_token: The ``X-Respectify-Revision-Token`` header. Set only when a
-            free-plan request assessed a comment; None for paid accounts and for endpoints
-            that never issue one. Send it back as ``revision_token=`` when the writer revises
-            the same comment, so the revision is not counted as a new comment.
+    ``result`` is the parsed response body (CommentScore, SpamDetectionResult, ...).
+    ``revision_token`` is the ``X-Respectify-Revision-Token`` header: set only when a
+    free-plan request assessed a comment, None for paid accounts and for endpoints that
+    never issue one. Send it back as ``revision_token=`` when the writer revises the same
+    comment, so the revision is not counted as a new comment.
     """
 
     result: T
+    """The parsed response body."""
+
     revision_token: Optional[str] = None
+    """The free plan's revision token for this comment, or None when the server sent none."""
 
 
 def _revision_token_from(response: httpx.Response) -> Optional[str]:
