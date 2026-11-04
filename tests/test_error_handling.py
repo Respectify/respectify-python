@@ -5,6 +5,7 @@ These tests mock httpx responses to simulate server error responses and verify
 that the SDK correctly extracts error messages and throws the right exception
 types. No real API calls are made.
 """
+from typing import Dict, Optional
 from unittest.mock import patch, MagicMock
 from uuid import UUID
 import httpx
@@ -16,24 +17,34 @@ from respectify.exceptions import (
     BadRequestError,
     ArticleContextNotFoundError,
     PaymentRequiredError,
+    FreeAllowanceExhaustedError,
+    RevisionLimitReachedError,
+    RateLimitedError,
     UnsupportedMediaTypeError,
     ServerError,
+    FREE_ALLOWANCE_EXHAUSTED_ERROR_CODE,
+    REVISION_LIMIT_REACHED_ERROR_CODE,
+    FREE_RATE_LIMITED_ERROR_CODE,
 )
 
 
-def make_mock_response(status_code: int, json_body: dict) -> MagicMock:
-    """Create a mock httpx.Response with the given status and JSON body."""
+def make_mock_response(
+    status_code: int, json_body: dict, headers: Optional[Dict[str, str]] = None
+) -> MagicMock:
+    """Create a mock httpx.Response with the given status, JSON body and headers."""
     resp = MagicMock(spec=httpx.Response)
     resp.status_code = status_code
     resp.reason_phrase = {
         400: "Bad Request",
         401: "Unauthorized",
         402: "Payment Required",
+        409: "Conflict",
         415: "Unsupported Media Type",
         429: "Too Many Requests",
         500: "Internal Server Error",
     }.get(status_code, "Unknown")
     resp.json.return_value = json_body
+    resp.headers = httpx.Headers(headers or {})
     resp.is_success = 200 <= status_code < 300
     return resp
 
@@ -140,6 +151,17 @@ class TestServerApiErrorFormat:
             assert err.message == "Rate limit exceeded. Please slow down."
             assert err.status_code == 429
 
+    def test_errors_without_error_code_have_none(self, client):
+        mock_resp = make_mock_response(401, {
+            "error": "Unauthorized",
+            "message": "Invalid user ID or API key.",
+            "code": 401,
+        })
+        with mock_httpx_post(mock_resp):
+            with pytest.raises(AuthenticationError) as exc_info:
+                client.evaluate_comment("test", UUID("00000000-0000-0000-0000-000000000000"))
+            assert exc_info.value.error_code is None
+
     def test_500_internal_server_error(self, client):
         mock_resp = make_mock_response(500, {
             "error": "Internal Server Error",
@@ -151,6 +173,152 @@ class TestServerApiErrorFormat:
                 client.evaluate_comment("test", UUID("00000000-0000-0000-0000-000000000000"))
             err = exc_info.value
             assert err.message == "An unexpected error occurred."
+
+
+ARTICLE_ID = UUID("00000000-0000-0000-0000-000000000000")
+UPGRADE_URL = "https://respectify.ai/dashboard/billing"
+
+
+class TestFreePlanErrors:
+    """The free plan's errors are told apart by the body's machine-readable error_code."""
+
+    def test_402_free_allowance_exhausted_maps_to_dedicated_error(self, client):
+        mock_resp = make_mock_response(402, {
+            "error": "Free comment allowance used up",
+            "message": f"This account has used all 100 free comments. Add credit: {UPGRADE_URL}",
+            "code": 402,
+            "error_code": FREE_ALLOWANCE_EXHAUSTED_ERROR_CODE,
+            "upgrade_url": UPGRADE_URL,
+        })
+        with mock_httpx_post(mock_resp):
+            with pytest.raises(FreeAllowanceExhaustedError) as exc_info:
+                client.evaluate_comment("test", ARTICLE_ID)
+            err = exc_info.value
+            assert err.status_code == 402
+            assert err.error_code == "free_allowance_exhausted"
+            assert err.upgrade_url == UPGRADE_URL
+            assert UPGRADE_URL in err.message
+
+    def test_free_allowance_exhausted_is_a_payment_required_error(self, client):
+        """Existing handlers that let the comment through on 402 keep working."""
+        mock_resp = make_mock_response(402, {
+            "error": "Free comment allowance used up",
+            "message": "Used up.",
+            "code": 402,
+            "error_code": FREE_ALLOWANCE_EXHAUSTED_ERROR_CODE,
+            "upgrade_url": UPGRADE_URL,
+        })
+        with mock_httpx_post(mock_resp):
+            with pytest.raises(PaymentRequiredError) as exc_info:
+                client.check_spam("test", ARTICLE_ID)
+            assert isinstance(exc_info.value, FreeAllowanceExhaustedError)
+
+    def test_402_without_error_code_stays_payment_required(self, client):
+        """The pre-existing insufficient-balance 402 has no error_code and must not change."""
+        mock_resp = make_mock_response(402, {
+            "error": "Insufficient balance",
+            "message": "Your balance is $0.00. This call costs $0.007. Add funds to continue.",
+            "code": 402,
+        })
+        with mock_httpx_post(mock_resp):
+            with pytest.raises(PaymentRequiredError) as exc_info:
+                client.evaluate_comment("test", ARTICLE_ID)
+            err = exc_info.value
+            assert type(err) is PaymentRequiredError
+            assert not isinstance(err, FreeAllowanceExhaustedError)
+            assert err.error_code is None
+
+    def test_free_allowance_exhausted_without_upgrade_url_field(self, client):
+        mock_resp = make_mock_response(402, {
+            "error": "Free comment allowance used up",
+            "message": "Used up.",
+            "code": 402,
+            "error_code": FREE_ALLOWANCE_EXHAUSTED_ERROR_CODE,
+        })
+        with mock_httpx_post(mock_resp):
+            with pytest.raises(FreeAllowanceExhaustedError) as exc_info:
+                client.evaluate_comment("test", ARTICLE_ID)
+            assert exc_info.value.upgrade_url is None
+
+    def test_409_revision_limit_reached(self, client):
+        mock_resp = make_mock_response(409, {
+            "error": "Revision limit reached",
+            "message": "This comment has had all 5 attempts the free plan allows.",
+            "code": 409,
+            "error_code": REVISION_LIMIT_REACHED_ERROR_CODE,
+        })
+        with mock_httpx_post(mock_resp):
+            with pytest.raises(RevisionLimitReachedError) as exc_info:
+                client.evaluate_comment("test", ARTICLE_ID)
+            err = exc_info.value
+            assert err.status_code == 409
+            assert err.error_code == "revision_limit_reached"
+            assert err.message == "This comment has had all 5 attempts the free plan allows."
+
+    def test_409_without_error_code_is_a_plain_respectify_error(self, client):
+        mock_resp = make_mock_response(409, {
+            "error": "Conflict",
+            "message": "Something else conflicted.",
+            "code": 409,
+        })
+        with mock_httpx_post(mock_resp):
+            with pytest.raises(RespectifyError) as exc_info:
+                client.evaluate_comment("test", ARTICLE_ID)
+            err = exc_info.value
+            assert type(err) is RespectifyError
+            assert err.status_code == 409
+
+    def test_429_free_rate_limited_with_retry_after(self, client):
+        mock_resp = make_mock_response(429, {
+            "error": "Too Many Requests",
+            "message": "Free keys may make 10 requests a minute. Retry in 37 seconds.",
+            "code": 429,
+            "error_code": FREE_RATE_LIMITED_ERROR_CODE,
+        }, headers={"Retry-After": "37"})
+        with mock_httpx_post(mock_resp):
+            with pytest.raises(RateLimitedError) as exc_info:
+                client.evaluate_comment("test", ARTICLE_ID)
+            err = exc_info.value
+            assert err.status_code == 429
+            assert err.error_code == "free_rate_limited"
+            assert err.retry_after_seconds == 37
+
+    def test_any_429_maps_to_rate_limited_error(self, client):
+        """A 429 without the free-plan code is still a RateLimitedError (and a RespectifyError)."""
+        mock_resp = make_mock_response(429, {
+            "error": "Too Many Requests",
+            "message": "Rate limit exceeded. Please slow down.",
+            "code": 429,
+        })
+        with mock_httpx_post(mock_resp):
+            with pytest.raises(RateLimitedError) as exc_info:
+                client.evaluate_comment("test", ARTICLE_ID)
+            err = exc_info.value
+            assert err.error_code is None
+            assert err.retry_after_seconds is None
+
+    def test_429_with_http_date_retry_after_yields_none(self, client):
+        mock_resp = make_mock_response(429, {
+            "error": "Too Many Requests",
+            "message": "Slow down.",
+            "code": 429,
+        }, headers={"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"})
+        with mock_httpx_post(mock_resp):
+            with pytest.raises(RateLimitedError) as exc_info:
+                client.evaluate_comment("test", ARTICLE_ID)
+            assert exc_info.value.retry_after_seconds is None
+
+    def test_free_plan_errors_reach_the_perspective_client_too(self, client):
+        mock_resp = make_mock_response(429, {
+            "error": "Too Many Requests",
+            "message": "Slow down.",
+            "code": 429,
+            "error_code": FREE_RATE_LIMITED_ERROR_CODE,
+        }, headers={"Retry-After": "5"})
+        with mock_httpx_post(mock_resp):
+            with pytest.raises(RateLimitedError) as exc_info:
+                client.perspective.analyze_comment({"comment": {"text": "x"}})
+            assert exc_info.value.retry_after_seconds == 5
 
 
 class TestInitTopicFromUrlFetchFailures:

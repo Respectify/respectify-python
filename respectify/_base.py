@@ -13,13 +13,34 @@ from respectify.exceptions import (
     ARTICLE_CONTEXT_NOT_FOUND_MARKER,
     AuthenticationError,
     BadRequestError,
+    FREE_ALLOWANCE_EXHAUSTED_ERROR_CODE,
+    FreeAllowanceExhaustedError,
     PaymentRequiredError,
+    RateLimitedError,
     RespectifyError,
+    REVISION_LIMIT_REACHED_ERROR_CODE,
+    RevisionLimitReachedError,
     ServerError,
     UnsupportedMediaTypeError,
 )
 
 T = TypeVar('T', bound=BaseModel)
+
+
+def _retry_after_seconds(response: httpx.Response) -> Optional[int]:
+    """Read the ``Retry-After`` header as a whole number of seconds.
+
+    The header may also be an HTTP date; that form is not converted and yields None,
+    as does a missing or malformed header.
+    """
+    raw = response.headers.get("Retry-After")
+    if not isinstance(raw, str):
+        return None
+    try:
+        seconds = int(raw.strip())
+    except ValueError:
+        return None
+    return seconds if seconds >= 0 else None
 
 
 def _sanitize_string(value: str) -> str:
@@ -142,6 +163,12 @@ class BaseRespectifyClient:
         else:
             error_message = f"HTTP {status_code}: {response.reason_phrase}"
         
+        # The server adds a machine-readable 'error_code' to the free-plan errors only;
+        # every other error body (including the insufficient-balance 402) has none.
+        error_code: Optional[str] = None
+        if isinstance(response_data, dict) and isinstance(response_data.get("error_code"), str):
+            error_code = response_data["error_code"]
+
         # Raise appropriate exception based on status code
         if status_code == 400:
             # A well-formed-but-unresolvable article context returns a 400 with a stable
@@ -157,9 +184,17 @@ class BaseRespectifyClient:
         elif status_code == 401:
             raise AuthenticationError(error_message, response_data)
         elif status_code == 402:
+            if error_code == FREE_ALLOWANCE_EXHAUSTED_ERROR_CODE:
+                raise FreeAllowanceExhaustedError(error_message, response_data)
             raise PaymentRequiredError(error_message, response_data)
+        elif status_code == 409 and error_code == REVISION_LIMIT_REACHED_ERROR_CODE:
+            raise RevisionLimitReachedError(error_message, response_data)
         elif status_code == 415:
             raise UnsupportedMediaTypeError(error_message, response_data)
+        elif status_code == 429:
+            raise RateLimitedError(
+                error_message, response_data, retry_after_seconds=_retry_after_seconds(response)
+            )
         elif status_code >= 500:
             raise ServerError(error_message, response_data)
         else:

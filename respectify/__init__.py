@@ -48,8 +48,15 @@ from respectify.exceptions import (
     BadRequestError,
     ArticleContextNotFoundError,
     PaymentRequiredError,
+    FreeAllowanceExhaustedError,
+    RevisionLimitReachedError,
+    RateLimitedError,
+    RequestTimeoutError,
     UnsupportedMediaTypeError,
     ServerError,
+    FREE_ALLOWANCE_EXHAUSTED_ERROR_CODE,
+    REVISION_LIMIT_REACHED_ERROR_CODE,
+    FREE_RATE_LIMITED_ERROR_CODE,
 )
 
 __all__ = [
@@ -94,6 +101,13 @@ __all__ = [
     "BadRequestError",
     "ArticleContextNotFoundError",
     "PaymentRequiredError",
+    "FreeAllowanceExhaustedError",
+    "RevisionLimitReachedError",
+    "RateLimitedError",
+    "RequestTimeoutError",
     "UnsupportedMediaTypeError",
     "ServerError",
+    "FREE_ALLOWANCE_EXHAUSTED_ERROR_CODE",
+    "REVISION_LIMIT_REACHED_ERROR_CODE",
+    "FREE_RATE_LIMITED_ERROR_CODE",
 ]
